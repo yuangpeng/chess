@@ -1,4 +1,5 @@
 # https://tromp.github.io/go.html
+# https://courses.ece.cornell.edu/ece5990/ECE5725_Fall2019_Projects/Dec_12_Demo/Go%20Player/yy852_pg477_Dec:12/index.html
 
 # Go.py
 from itertools import product
@@ -50,7 +51,8 @@ def clear(pos, points):
 
 # Article 4b: that don't reach empty.
 def liberties(pos, group):
-    return {nbr for p in group for nbr in neighbours(p) if pos[nbr] == Color.EMPTY}
+    empty = [nbr for p in group for nbr in neighbours(p) if pos[nbr] == Color.EMPTY]
+    return len(empty) > 0
 
 
 # Article 5a: Starting with an empty grid
@@ -77,8 +79,8 @@ class GoError(Exception):
 
 
 def testko(pos, past):
-    if pos in past:
-        raise GoError("Superko violation")
+    # if pos in past:
+    #     raise GoError("Superko violation")
     return pos
 
 
@@ -86,7 +88,7 @@ def testko(pos, past):
 def move(player, point, pos):
     pos1 = pos.copy()
     pos1[point] = Color.STONE[player]
-    opponent = {nbr for nbr in neighbours(point) if pos1[nbr] == Color.STONE[player]}
+    opponent = [nbr for nbr in neighbours(point) if pos1[nbr] == Color.STONE[player]]
     pos2 = clear(pos1, opponent)
     pos3 = clear(pos2, [point])
     return pos3
@@ -147,7 +149,9 @@ def show_pos(pos):
 
 
 def show_game(game):
-    import ipdb; ipdb.set_trace()
+    import ipdb
+
+    ipdb.set_trace()
     past_positions = results(game)
     print(show_pos(empty_pos))
     for pos in past_positions:
