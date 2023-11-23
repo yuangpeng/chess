@@ -4,6 +4,63 @@
 # Go.py
 from itertools import product
 
+from enum import Enum
+
+
+class Color(Enum):
+    EMPTY = "EMPTY"
+    BLACK = "BLACK"
+    WHITE = "WHITE"
+
+
+class GoGame:
+    def __init__(self, size: int):
+        self.size = size
+        self.board = [[Color.EMPTY for _ in range(size)] for _ in range(size)]
+        self.__turns = 0
+
+    def move(self, coord: tuple(int, int) | None = None):
+        if coord is not None:
+            x, y = coord
+            if self.turns % 2 == 0:
+                self.board[x][y] = Color.BLACK
+            else:
+                self.board[x][y] = Color.WHITE
+            opponent = [nbr for nbr in self.neighbors(coord) if self.board[nbr[0]][nbr[1]] != self.board[x][y]]
+            self.clear(opponent)
+            self.clear(coord)
+
+        self.__turns += 1
+
+    def neighbors(self, coord: tuple(int, int)) -> list(tuple(int, int)):
+        x, y = coord
+        return [(x, ny) for ny in (y - 1, y + 1) if 1 <= ny <= self.size] + [(nx, y) for nx in (x - 1, x + 1) if 1 <= nx <= self.size]
+
+    def clear(self, points: tuple(int, int) | list(tuple(int, int))):
+        captured = set()
+        for pt in points:
+            str_points = self.string(pt)
+            if not self.liberties(str_points):
+                captured.update(str_points)
+        for cap in captured:
+            self.board[cap[0]][cap[1]] = Color.EMPTY
+
+    def string(self, coord: tuple(int, int)) -> list(tuple(int, int)):
+        def expand(curr: list(tuple(int, int)), prev: list(tuple(int, int))):
+            next_points = set(nbr for p in curr for nbr in self.neighbors(p) if self.board[nbr[0]][nbr[1]] == self.board[coord[0]][coord[1]]) - set(prev)
+            return expand([next_points], [curr]) if next_points else [curr, prev]
+
+        return expand([coord], [])[0]
+
+    def liberties(self, group: list(tuple(int, int))) -> bool:
+        empty = [nbr for p in group for nbr in self.neighbors(p) if self.board[nbr[0]][nbr[1]] == Color.EMPTY]
+        return len(empty) > 0
+
+    @property
+    def turns(self):
+        return self.__turns
+
+
 # Article 1a: Go is played on a 19x19 square grid of points
 size = 19
 coords = list(range(1, size + 1))
@@ -17,9 +74,9 @@ class Player:
 
 
 # Article 2: Each point on the grid may be colored black, white or empty.
-class Color:
-    EMPTY = "Empty"
-    STONE = {Player.BLACK: "Black", Player.WHITE: "White"}
+# class Color:
+#     EMPTY = "Empty"
+#     STONE = {Player.BLACK: "Black", Player.WHITE: "White"}
 
 
 # Article 3b: if there is a path of (vertically or horizontally) adjacent points of P's color from P
