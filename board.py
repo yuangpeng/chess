@@ -1,10 +1,12 @@
 # https://tromp.github.io/go.html
 # https://courses.ece.cornell.edu/ece5990/ECE5725_Fall2019_Projects/Dec_12_Demo/Go%20Player/yy852_pg477_Dec:12/index.html
+# https://webdocs.cs.ualberta.ca/~hayward/355/gorules.pdf
+from __future__ import annotations
 
-# Go.py
-from itertools import product
-
+from collections import deque
+from abc import ABC, abstractmethod
 from enum import Enum
+from loguru import logger
 
 
 class Color(Enum):
@@ -13,30 +15,69 @@ class Color(Enum):
     WHITE = "WHITE"
 
 
-class GoGame:
+class BaseBoard(ABC):
     def __init__(self, size: int):
         self.size = size
         self.board = [[Color.EMPTY for _ in range(size)] for _ in range(size)]
-        self.__turns = 0
+        self.round = 0
+
+    @abstractmethod
+    def move(self, coord: tuple(int, int) | None = None):
+        raise NotImplementedError
+
+
+class GoGame(BaseBoard):
+    # Rule 1: Go is played on a 19x19 square grid of points, by two players called Black and White.
+    def __init__(self, size: int):
+        # Rule 2: Each point on the grid may be colored black, white or empty.
+        super().__init__(size)
+        self.komi = 6.5
+        self.ko_point: tuple(int, int) | None = None
+        self.last_move_captured = None
+        self.abstention = 0
 
     def move(self, coord: tuple(int, int) | None = None):
         if coord is not None:
-            x, y = coord
-            if self.turns % 2 == 0:
-                self.board[x][y] = Color.BLACK
-            else:
-                self.board[x][y] = Color.WHITE
-            opponent = [nbr for nbr in self.neighbors(coord) if self.board[nbr[0]][nbr[1]] != self.board[x][y]]
-            self.clear(opponent)
-            self.clear(coord)
+            # Rule 6: A turn is either a pass or a move that doesn’t repeat an earlier grid coloring (superko).
+            if self.ko_point == coord:
+                logger.info("Cannot recapture ko immediately.")
+                return
 
-        self.__turns += 1
+            # Rule 5: Starting with an empty grid, the players alternate turns, starting with Black.
+            current_color = Color.BLACK if self.round % 2 == 0 else Color.WHITE
+            opposite_color = Color.WHITE if current_color == Color.BLACK else Color.BLACK
+            x, y = coord
+            # Rule 7: A move consists of coloring an empty point one’s own color; then clearing the opponent color, and then clearing one’s own color.
+            self.board[x][y] = current_color
+            opponent = [nbr for nbr in self.neighbors(coord) if self.board[nbr[0]][nbr[1]] == opposite_color]
+            captured = self.clear(opponent)
+
+            # set ko point
+            if len(captured) == 1:
+                self.ko_point = captured.pop()
+            else:
+                self.ko_point = None
+
+            self.clear(coord)
+        else:
+            self.abstention += 1
+            # Rule 8: The game ends after two consecutive passes.
+            if self.abstention == 2:
+                # Rule 10: The player with the higher score at the end of the game is the winner. Equal scores result in a tie.
+                black_score, white_score = self.score()
+                logger.info("Game over.")
+                logger.info(f"Black: {black_score} White: {white_score}.")
+
+        self.round += 1
 
     def neighbors(self, coord: tuple(int, int)) -> list(tuple(int, int)):
         x, y = coord
         return [(x, ny) for ny in (y - 1, y + 1) if 1 <= ny <= self.size] + [(nx, y) for nx in (x - 1, x + 1) if 1 <= nx <= self.size]
 
-    def clear(self, points: tuple(int, int) | list(tuple(int, int))):
+    # Rule 4: Clearing a color is the process of emptying all points of that color that don’t reach empty.
+    def clear(self, points: tuple[int, int] | list[tuple[int, int]]) -> set[tuple[int, int]]:
+        if isinstance(points, tuple):
+            points = [points]
         captured = set()
         for pt in points:
             str_points = self.string(pt)
@@ -44,179 +85,147 @@ class GoGame:
                 captured.update(str_points)
         for cap in captured:
             self.board[cap[0]][cap[1]] = Color.EMPTY
+        return captured
 
-    def string(self, coord: tuple(int, int)) -> list(tuple(int, int)):
-        def expand(curr: list(tuple(int, int)), prev: list(tuple(int, int))):
-            next_points = set(nbr for p in curr for nbr in self.neighbors(p) if self.board[nbr[0]][nbr[1]] == self.board[coord[0]][coord[1]]) - set(prev)
-            return expand([next_points], [curr]) if next_points else [curr, prev]
+    # Rule 3: A point P, not colored C, is said to reach C if there is a path of (vertically or horizontally) adjacent points of P’s color from P to a point of color C.
+    def string(self, coord: tuple[int, int]) -> list(tuple[int, int]):
+        visited = set()
+        visited.add(coord)
 
-        return expand([coord], [])[0]
+        queue = deque([coord])
 
-    def liberties(self, group: list(tuple(int, int))) -> bool:
+        while queue:
+            for nbr in self.neighbors(queue.popleft()):
+                if self.board[nbr[0]][nbr[1]] == self.board[coord[0]][coord[1]] and nbr not in visited:
+                    visited.add(nbr)
+                    queue.append(nbr)
+
+        return visited
+
+    def liberties(self, group: list(tuple[int, int])) -> bool:
         empty = [nbr for p in group for nbr in self.neighbors(p) if self.board[nbr[0]][nbr[1]] == Color.EMPTY]
         return len(empty) > 0
 
-    @property
-    def turns(self):
-        return self.__turns
+    def calculate_territory(self) -> tuple(set[tuple[int, int]], set[tuple[int, int]]):
+        black_territory = set()
+        white_territory = set()
+        neutral_territory = set()
+        visited = set()
+
+        for x in range(self.size):
+            for y in range(self.size):
+                if (x, y) in visited or self.board[x][y] != Color.EMPTY:
+                    continue
+
+                territory, borders = self.flood_fill((x, y))
+                visited.update(territory)
+
+                # Determine the territory's ownership by its borders
+                if all(self.board[x][y] == Color.BLACK for x, y in borders):
+                    black_territory.update(territory)
+                elif all(self.board[x][y] == Color.WHITE for x, y in borders):
+                    white_territory.update(territory)
+                else:
+                    neutral_territory.update(territory)
+
+        return black_territory, white_territory
+
+    def remove_dead_stones(self) -> tuple(int, int):
+        return 0, 0
+
+    def flood_fill(self, start: tuple(int, int)):
+        queue = deque([start])
+        territory = set([start])
+        borders = set()
+
+        while queue:
+            x, y = queue.popleft()
+            for nx, ny in self.neighbors((x, y)):
+                if (nx, ny) in territory:
+                    continue
+
+                if self.board[nx][ny] == Color.EMPTY:
+                    queue.append((nx, ny))
+                    territory.add((nx, ny))
+                else:
+                    borders.add((nx, ny))
+
+        return territory, borders
+
+    def score(self):
+        # Rule 9: A player’s score is the number of points of her color, plus the number of empty points that reach only her color.
+        black_captures, white_captures = self.remove_dead_stones()
+        black_territory, white_territory = self.calculate_territory()
+
+        black_score = len(black_territory) + white_captures
+        white_score = len(white_territory) + black_captures + self.komi
+
+        return black_score, white_score
 
 
-# Article 1a: Go is played on a 19x19 square grid of points
-size = 19
-coords = list(range(1, size + 1))
-points = [(x, y) for x in coords for y in coords]
+import pygame
+import sys
+
+# Constants
+BOARD_SIZE = 19
+GRID_SIZE = 40
+WINDOW_SIZE = GRID_SIZE * (BOARD_SIZE + 1)
+STONE_RADIUS = GRID_SIZE // 2 - 2
+
+# Colors
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+BACKGROUND = (175, 135, 0)
+go_game = GoGame(BOARD_SIZE)
+
+# Initialize pygame
+pygame.init()
+
+# Create the screen
+screen = pygame.display.set_mode((WINDOW_SIZE, WINDOW_SIZE))
+pygame.display.set_caption("Go Game")
+
+# Initialize the board
+# board = [[None for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
+# current_color = BLACK
 
 
-# Article 1b: by two players called Black and White
-class Player:
-    BLACK = "Black"
-    WHITE = "White"
+def draw_board():
+    screen.fill(BACKGROUND)
+    for row in range(BOARD_SIZE):
+        for col in range(BOARD_SIZE):
+            pygame.draw.rect(screen, BLACK, (GRID_SIZE + col * GRID_SIZE - 1, GRID_SIZE + row * GRID_SIZE - 1, 2, 2))
+            if go_game.board[row][col] in (Color.BLACK, Color.WHITE):
+                if go_game.board[row][col] == Color.BLACK:
+                    draw_color = BLACK
+                else:
+                    draw_color = WHITE
+                pygame.draw.circle(screen, draw_color, (GRID_SIZE + col * GRID_SIZE, GRID_SIZE + row * GRID_SIZE), STONE_RADIUS)
 
 
-# Article 2: Each point on the grid may be colored black, white or empty.
-# class Color:
-#     EMPTY = "Empty"
-#     STONE = {Player.BLACK: "Black", Player.WHITE: "White"}
+def handle_mouse_click(pos):
+    # global current_color
+    x, y = pos
+    row = round((y - GRID_SIZE) / GRID_SIZE)
+    col = round((x - GRID_SIZE) / GRID_SIZE)
+
+    if 0 <= row < BOARD_SIZE and 0 <= col < BOARD_SIZE and go_game.board[row][col] == Color.EMPTY:
+        go_game.move((row, col))
+        draw_board()  # Redraw the board to show the updated state
 
 
-# Article 3b: if there is a path of (vertically or horizontally) adjacent points of P's color from P
-def neighbours(point):
-    x, y = point
-    return [(x, ny) for ny in (y - 1, y + 1) if 1 <= ny <= size] + [(nx, y) for nx in (x - 1, x + 1) if 1 <= nx <= size]
+# Game loop
+running = True
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            handle_mouse_click(pygame.mouse.get_pos())
+            draw_board()  # Redraw the board after every click
+
+    pygame.display.flip()
 
 
-def string(pos, point):
-    def expand(curr, prev):
-        next_points = set(nbr for p in curr for nbr in neighbours(p) if pos[nbr] == pos[point]) - set(prev)
-        return [next_points, curr] if next_points else [curr, prev]
-
-    return expand([point], [])
-
-
-# Article 4: Clearing a color is the process of emptying all points of that color
-def clear(pos, points):
-    def new_pos(pt):
-        return Color.EMPTY if pt in captured else pos[pt]
-
-    captured = set()
-    for pt in points:
-        str_points = string(pos, pt)
-        if not liberties(pos, str_points[0]):
-            captured.update(str_points[0])
-    return {pt: new_pos(pt) for pt in pos}
-
-
-# Article 4b: that don't reach empty.
-def liberties(pos, group):
-    empty = [nbr for p in group for nbr in neighbours(p) if pos[nbr] == Color.EMPTY]
-    return len(empty) > 0
-
-
-# Article 5a: Starting with an empty grid
-empty_pos = {pt: Color.EMPTY for pt in points}
-
-
-# Article 5b: the players alternate turns, starting with Black.
-def results(turns):
-    past_positions = [empty_pos]
-    for turn in turns:
-        past_positions.append(play(turn, past_positions[-1]))
-    return past_positions
-
-
-# Article 6a: A turn is either a pass; or a move
-class Turn:
-    def __init__(self, move=None):
-        self.move = move
-
-
-# Article 6b: that doesn't repeat an earlier grid coloring.
-class GoError(Exception):
-    pass
-
-
-def testko(pos, past):
-    # if pos in past:
-    #     raise GoError("Superko violation")
-    return pos
-
-
-# Article 7: A move consists of coloring an empty point one's own color; then clearing the opponent color, and then clearing one's own color.
-def move(player, point, pos):
-    pos1 = pos.copy()
-    pos1[point] = Color.STONE[player]
-    opponent = [nbr for nbr in neighbours(point) if pos1[nbr] == Color.STONE[player]]
-    pos2 = clear(pos1, opponent)
-    pos3 = clear(pos2, [point])
-    return pos3
-
-
-def play(turn, pos):
-    if isinstance(turn, Turn):
-        if turn.move:
-            point = turn.move
-            player = (
-                Player.BLACK
-                if sum(1 for p in pos.values() if p == Color.STONE[Player.BLACK]) <= sum(1 for p in pos.values() if p == Color.STONE[Player.WHITE])
-                else Player.WHITE
-            )
-            if pos[point] != Color.EMPTY:
-                raise GoError("Occupied")
-            new_pos = move(player, point, pos)
-            return testko(new_pos, pos)
-        else:
-            return pos  # Pass
-    else:
-        raise ValueError("Invalid turn")
-
-
-# Article 8: The game ends after two consecutive passes.
-def gameover(past_positions):
-    if past_positions[-1] == past_positions[-2]:
-        bscore, wscore = score(past_positions[-1], Player.BLACK), score(past_positions[-1], Player.WHITE)
-        return f"\nGame Over. Black: {bscore} White: {wscore}. {winner(bscore, wscore)}\n"
-    return ""
-
-
-# Article 9: A player's score is the number of points of her color, plus the number of empty points that reach only her color.
-def score(pos, player):
-    return sum(1 for pt, owner in pos.items() if owner == Color.STONE[player] or (owner == Color.EMPTY and reachable_only_by(pos, pt, player)))
-
-
-def reachable_only_by(pos, pt, player):
-    return all(pos[nbr] in (Color.STONE[player], Color.EMPTY) for nbr in neighbours(pt))
-
-
-# Article 10: The player with the higher score at the end of the game is the winner. Equal scores result in a tie.
-def winner(bscore, wscore):
-    if bscore > wscore:
-        return "Black wins."
-    elif bscore < wscore:
-        return "White wins."
-    else:
-        return "It's a tie."
-
-
-# Show stuff
-def show_pos(pos):
-    return "\n".join(
-        " ".join(Color.EMPTY if pos[(x, y)] == Color.EMPTY else "@" if pos[(x, y)] == Color.STONE[Player.BLACK] else "O" for x in coords)
-        for y in reversed(coords)
-    )
-
-
-def show_game(game):
-    import ipdb
-
-    ipdb.set_trace()
-    past_positions = results(game)
-    print(show_pos(empty_pos))
-    for pos in past_positions:
-        print(show_pos(pos))
-
-
-# Example game
-game = [Turn((2, 1)), Turn((2, 3)), Turn((2, 2)), Turn((3, 2)), Turn((1, 2)), Turn(), Turn()]
-
-if __name__ == "__main__":
-    show_game(game)
+pygame.quit()
+sys.exit()
