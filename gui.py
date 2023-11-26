@@ -4,7 +4,7 @@ import sys
 
 import pygame
 
-from board import Color, BaseBoardGame, GoGame
+from board import BaseBoardGame, Color, GoGame, GomokuGame
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -31,14 +31,16 @@ class Button:
 
 
 class BoardGameGUI:
-    def __init__(self, game: BaseBoardGame, grid_size: int = 40):
+    def __init__(self, game: BaseBoardGame, grid_size: int = 40, sidebar_width: int = 300):
         self.game = game
 
-        # Initialize pygame, and create the screen
+        # Initialize pygame, and create the screen with additional space for the sidebar
         pygame.init()
         self.grid_size = grid_size
-        self.windows_size = self.grid_size * (self.game.size + 1)
-        self.screen = pygame.display.set_mode((self.windows_size, self.windows_size))
+        self.sidebar_width = sidebar_width
+        self.window_width = self.grid_size * (self.game.size + 1) + self.sidebar_width
+        self.window_height = self.grid_size * (self.game.size + 1)
+        self.screen = pygame.display.set_mode((self.window_width, self.window_height))
         pygame.display.set_caption(f"{self.game.name}")
         self.stone_radius = self.grid_size // 2 - 2
 
@@ -48,7 +50,8 @@ class BoardGameGUI:
             text = font.render("Current Player: Black", True, BLACK)
         else:
             text = font.render("Current Player: White", True, WHITE)
-        self.screen.blit(text, (10, 10))
+        # Draw on the sidebar, not on the board
+        self.screen.blit(text, (self.window_width - self.sidebar_width + 10, 10))
 
     def draw_board(self):
         self.screen.fill(BACKGROUND)
@@ -72,15 +75,18 @@ class BoardGameGUI:
                     )
 
     def create_buttons(self):
+        # Create buttons in the sidebar
+        sidebar_x = self.window_width - self.sidebar_width + 60  # X position for all buttons
         self.buttons = [
-            Button(10, self.windows_size - 70, 100, 50, "Undo", self.undo_move),
-            Button(120, self.windows_size - 70, 100, 50, "Restart", self.restart_game),
-            Button(230, self.windows_size - 70, 100, 50, "Pass", self.pass_turn),
-            Button(340, self.windows_size - 70, 100, 50, "Save", lambda: self.save_game_state("game_state.txt")),
-            Button(450, self.windows_size - 70, 100, 50, "Load", lambda: self.load_game_state("game_state.txt")),
+            Button(sidebar_x, self.window_height - 300, 180, 50, "Undo", self.undo_move),
+            Button(sidebar_x, self.window_height - 240, 180, 50, "Restart", self.restart_game),
+            Button(sidebar_x, self.window_height - 180, 180, 50, "Pass", self.pass_turn),
+            Button(sidebar_x, self.window_height - 120, 180, 50, "Save", lambda: self.save_game_state(f"game_state.pickle")),
+            Button(sidebar_x, self.window_height - 60, 180, 50, "Load", lambda: self.load_game_state("game_state.pickle")),
         ]
 
     def draw_buttons(self):
+        # Draw buttons in the sidebar
         for button in self.buttons:
             button.draw(self.screen)
 
@@ -119,8 +125,7 @@ class BoardGameGUI:
                         for button in self.buttons:
                             button.handle_event(event)
                         pos = pygame.mouse.get_pos()
-                        if pos[1] < self.windows_size - 80:
-                            self.handle_mouse_click(pos)
+                        self.handle_mouse_click(pos)
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_u:
                         self.undo_move()
@@ -129,9 +134,9 @@ class BoardGameGUI:
                     elif event.key == pygame.K_p:
                         self.pass_turn()
                     elif event.key == pygame.K_s:
-                        self.save_game_state("game_state.txt")
+                        self.save_game_state("game_state.pickle")
                     elif event.key == pygame.K_l:
-                        self.load_game_state("game_state.txt")
+                        self.load_game_state("game_state.pickle")
                     elif event.key == pygame.K_q:
                         running = False
                 self.draw_board()
@@ -146,5 +151,6 @@ class BoardGameGUI:
 if __name__ == "__main__":
     # 初始化游戏和GUI
     go_game = GoGame(19)
-    gui = BoardGameGUI(go_game)
+    gomoku_game = GomokuGame(19)
+    gui = BoardGameGUI(gomoku_game)
     gui.start_game()

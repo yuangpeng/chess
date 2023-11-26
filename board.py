@@ -3,13 +3,13 @@
 # https://webdocs.cs.ualberta.ca/~hayward/355/gorules.pdf
 from __future__ import annotations
 
-from collections import deque
-from abc import ABC, abstractmethod
-from enum import Enum
-from loguru import logger
-import pickle
 import copy
+import pickle
+from abc import ABC, abstractmethod
 from collections import deque
+from enum import Enum
+
+from loguru import logger
 
 
 class Color(Enum):
@@ -33,13 +33,15 @@ class BaseBoardGame(ABC):
     def move(self, coord: tuple[int, int] | None = None):
         raise NotImplementedError
 
-    @abstractmethod
     def regret(self):
-        raise NotImplementedError
+        if len(self.history) > 0:
+            self.restore_from_memento(self.history.pop())
+            logger.info("Move undone.")
+        else:
+            self.restart()
 
-    @abstractmethod
     def restart(self):
-        raise NotImplementedError
+        self.__init__(self.size)
 
     @abstractmethod
     def create_memento(self) -> Memento:
@@ -113,16 +115,6 @@ class GoGame(BaseBoardGame):
                 logger.info(f"Black: {black_score} White: {white_score}.")
 
         self.round += 1
-
-    def regret(self):
-        if len(self.history) > 0:
-            self.restore_from_memento(self.history.pop())
-            logger.info("Move undone.")
-        else:
-            self.restart()
-
-    def restart(self):
-        self.__init__(self.size)
 
     def create_memento(self) -> Memento:
         # Save the current state in a memento
@@ -253,3 +245,64 @@ class GoGame(BaseBoardGame):
         white_score = len(white_territory) + black_captures + self.komi
 
         return black_score, white_score
+
+
+class GomokuGame(BaseBoardGame):
+    def __init__(self, size: int):
+        super().__init__(size)
+        self.name = "Gomoku Game"
+
+    def move(self, coord: tuple[int, int] | None = None):
+        assert coord is not None, "Coord cannot be None."
+        self.history.append(self.create_memento())
+        x, y = coord
+        self.board[x][y] = self.cur_player()
+        if self.is_five(coord):
+            logger.info(f"{self.cur_player().value} wins.")
+        self.round += 1
+
+    def is_five(self, coord: tuple[int, int]) -> bool:
+        directions = [(1, 0), (0, 1), (1, 1), (1, -1)]  # 水平、垂直、主对角线、副对角线
+        for d in directions:
+            if self.count_in_direction(coord, d[0], d[1]) + self.count_in_direction(coord, -d[0], -d[1]) - 1 >= 5:
+                return True
+        return False
+
+    def count_in_direction(self, start: tuple[int, int], dx: int, dy: int) -> int:
+        count = 0
+        x, y = start
+        while 0 <= x < self.size and 0 <= y < self.size and self.board[x][y] == self.cur_player():
+            count += 1
+            x += dx
+            y += dy
+        return count
+
+    def create_memento(self) -> Memento:
+        # Save the current state in a memento
+        state = {
+            "name": self.name,
+            "size": self.size,
+            "board": copy.deepcopy(self.board),
+            "round": self.round,
+            # "history": copy.deepcopy(self.history),
+        }
+        return Memento(state)
+
+    def restore_from_memento(self, memento: Memento):
+        # Restore the state from the memento
+        state = memento.get_saved_state()
+        self.name = state["name"]
+        self.size = state["size"]
+        self.board = state["board"]
+        self.round = state["round"]
+        # self.history = state["history"]
+
+    def save_to_file(self, file_path: str):
+        with open(file_path, "wb") as file:
+            pickle.dump(self.create_memento(), file)
+            logger.info("Game saved to file.")
+
+    def load_from_file(self, file_path: str):
+        with open(file_path, "rb") as file:
+            self.restore_from_memento(pickle.load(file))
+            logger.info("Game loaded from file.")
