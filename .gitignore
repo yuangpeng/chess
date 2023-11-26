@@ -1,2 +1,4 @@
 *.docx
 .history/
+*.pyc
+__pycache__/
