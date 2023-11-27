@@ -24,6 +24,8 @@ class BaseBoardGame(ABC):
         self.size = size
         self.board = [[Color.EMPTY for _ in range(size)] for _ in range(size)]
         self.round = 0
+        self.game_over = False
+        self.winner = ""
         self.history: list[Memento] = []  # Use a list of Mementos for the history
 
     def cur_player(self) -> Color:
@@ -32,6 +34,11 @@ class BaseBoardGame(ABC):
     @abstractmethod
     def move(self, coord: tuple[int, int] | None = None):
         raise NotImplementedError
+
+    def surrender(self):
+        self.game_over = True
+        self.winner = "White" if self.cur_player() == Color.BLACK else "Black"
+        logger.info(f"{self.winner} wins.")
 
     def regret(self):
         if len(self.history) > 0:
@@ -78,8 +85,11 @@ class GoGame(BaseBoardGame):
         self.ko_point: tuple[int, int] | None = None
         self.last_move_captured = None
         self.abstention = 0
+        self.final_score = ""
 
     def move(self, coord: tuple[int, int] | None = None):
+        if self.game_over:
+            return
         if coord is not None:
             # Rule 6: A turn is either a pass or a move that doesn’t repeat an earlier grid coloring (superko).
             if self.ko_point == coord:
@@ -111,8 +121,10 @@ class GoGame(BaseBoardGame):
             if self.abstention == 2:
                 # Rule 10: The player with the higher score at the end of the game is the winner. Equal scores result in a tie.
                 black_score, white_score = self.score()
-                logger.info("Game over.")
-                logger.info(f"Black: {black_score} White: {white_score}.")
+                logger.info(f"Game over. Black: {black_score}, White: {white_score}")
+                self.game_over = True
+                self.winner = f"Black" if black_score > white_score else f"White" if black_score < white_score else f"Tie"
+                self.final_score = f"Black: {black_score}, White: {white_score}"
 
         self.round += 1
 
@@ -123,6 +135,9 @@ class GoGame(BaseBoardGame):
             "size": self.size,
             "board": copy.deepcopy(self.board),
             "round": self.round,
+            "game_over": self.game_over,
+            "winner": self.winner,
+            "final_score": self.final_score,
             # "history": copy.deepcopy(self.history),
             "komi": self.komi,
             "ko_point": self.ko_point,
@@ -138,6 +153,9 @@ class GoGame(BaseBoardGame):
         self.size = state["size"]
         self.board = state["board"]
         self.round = state["round"]
+        self.game_over = state["game_over"]
+        self.winner = state["winner"]
+        self.final_score = state["final_score"]
         # self.history = state["history"]
         self.komi = state["komi"]
         self.ko_point = state["ko_point"]
@@ -253,16 +271,21 @@ class GomokuGame(BaseBoardGame):
         self.name = "Gomoku Game"
 
     def move(self, coord: tuple[int, int] | None = None):
-        assert coord is not None, "Coord cannot be None."
+        if self.game_over:
+            return
+        if coord is None:
+            logger.warning("Coord cannot be None.")
+            return
         self.history.append(self.create_memento())
         x, y = coord
         self.board[x][y] = self.cur_player()
         if self.is_five(coord):
+            self.game_over = True
             logger.info(f"{self.cur_player().value} wins.")
         self.round += 1
 
     def is_five(self, coord: tuple[int, int]) -> bool:
-        directions = [(1, 0), (0, 1), (1, 1), (1, -1)]  # 水平、垂直、主对角线、副对角线
+        directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
         for d in directions:
             if self.count_in_direction(coord, d[0], d[1]) + self.count_in_direction(coord, -d[0], -d[1]) - 1 >= 5:
                 return True
@@ -284,6 +307,8 @@ class GomokuGame(BaseBoardGame):
             "size": self.size,
             "board": copy.deepcopy(self.board),
             "round": self.round,
+            "game_over": self.game_over,
+            "winner": self.winner,
             # "history": copy.deepcopy(self.history),
         }
         return Memento(state)
@@ -295,6 +320,8 @@ class GomokuGame(BaseBoardGame):
         self.size = state["size"]
         self.board = state["board"]
         self.round = state["round"]
+        self.game_over = state["game_over"]
+        self.winner = state["winner"]
         # self.history = state["history"]
 
     def save_to_file(self, file_path: str):
