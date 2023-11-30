@@ -1,0 +1,119 @@
+@startuml stage1
+
+class BaseBoardGame {
+    - name: str
+    - size: int
+    - board: list[list[Color]]
+    - round: int
+    - game_over: bool
+    - winner: str
+    - history: list[Memento]
+
+    + cur_player(): Color
+    + move(coord: tuple[int, int] | None): void
+    + surrender(): void
+    + regret(): void
+    + restart(): void
+    + create_memento(): Memento
+    + restore_from_memento(memento: Memento): void
+    + save_to_file(file_path: str): void
+    + load_from_file(file_path: str): void
+}
+
+class GoGame {
+    - komi: float
+    - ko_point: tuple[int, int] | None
+    - last_move_captured: NoneType
+    - abstention: int
+    - final_score: str
+
+    + move(coord: tuple[int, int] | None): void
+    + create_memento(): Memento
+    + restore_from_memento(memento: Memento): void
+    + save_to_file(file_path: str): void
+    + load_from_file(file_path: str): void
+    + neighbors(coord: tuple[int, int]): list[tuple[int, int]]
+    + clear(points: tuple[int, int] | list[tuple[int, int]]): set[tuple[int, int]]
+    + string(coord: tuple[int, int]): list[tuple[int, int]]
+    + liberties(group: list[tuple[int, int]]): bool
+    + calculate_territory(): tuple(set[tuple[int, int]], set[tuple[int, int]])
+    + remove_dead_stones(): tuple[int, int]
+    + flood_fill(start: tuple[int, int]): (set[tuple[int, int]], set[tuple[int, int]])
+    + score(): tuple[int, int]
+}
+
+class GomokuGame {
+    + move(coord: tuple[int, int] | None): void
+    + is_five(coord: tuple[int, int]): bool
+    + count_in_direction(start: tuple[int, int], dx: int, dy: int): int
+    + create_memento(): Memento
+    + restore_from_memento(memento: Memento): void
+    + save_to_file(file_path: str): void
+    + load_from_file(file_path: str): void
+}
+
+class Memento {
+    - state: dict
+
+    + get_saved_state(): dict
+}
+
+class Color <<enum>> {
+    EMPTY
+    BLACK
+    WHITE
+}
+
+class BoardGameGUI {
+    - game_list: list[BaseBoardGame]
+    - cur_game_type: BaseBoardGame
+    - size: int
+    - game: BaseBoardGame
+    - ratio: float
+    - grid_size: int
+    - orig_sidebar_width: int
+    - sidebar_width: int
+    - screen: pygame.Surface
+    - stone_radius: int
+    - buttons: list[Button]
+
+    + init_pygame(): void
+    + draw_current_game(): void
+    + draw_current_player(): void
+    + draw_round(): void
+    + draw_winner(): void
+    + draw_board(): void
+    + create_buttons(): void
+    + draw_buttons(): void
+    + init_go_game(): void
+    + init_gomoku_game(): void
+    + nine_way(): void
+    + thirteen_way(): void
+    + nineteen_way(): void
+    + surrender(): void
+    + undo_move(): void
+    + restart_game(): void
+    + pass_turn(): void
+    + save_game_state(filename: str): void
+    + load_game_state(filename: str): void
+    + handle_mouse_click(pos: tuple(float, float)): void
+    + start_game(): void
+}
+
+class Button {
+    - rect: pygame.Rect
+    - ratio: float
+    - text: str
+    - callback: callable
+
+    + draw(screen: pygame.Surface): void
+    + handle_event(event: pygame.event.Event): void
+}
+
+BaseBoardGame <|-- GoGame
+BaseBoardGame <|-- GomokuGame
+BaseBoardGame ..> Memento
+BoardGameGUI *--> Button
+BoardGameGUI *--> BaseBoardGame
+
+@enduml

@@ -31,6 +31,9 @@ class BaseBoardGame(ABC):
     def cur_player(self) -> Color:
         return Color.BLACK if self.round % 2 == 0 else Color.WHITE
 
+    def opposite_player(self) -> Color:
+        return Color.WHITE if self.round % 2 == 0 else Color.BLACK
+
     @abstractmethod
     def move(self, coord: tuple[int, int] | None = None):
         raise NotImplementedError
@@ -100,7 +103,7 @@ class GoGame(BaseBoardGame):
 
             # Rule 5: Starting with an empty grid, the players alternate turns, starting with Black.
             current_color = self.cur_player()
-            opposite_color = Color.WHITE if current_color == Color.BLACK else Color.BLACK
+            opposite_color = self.opposite_player()
             x, y = coord
             # Rule 7: A move consists of coloring an empty point one’s own color; then clearing the opponent color, and then clearing one’s own color.
             self.board[x][y] = current_color
@@ -281,6 +284,7 @@ class GomokuGame(BaseBoardGame):
         self.board[x][y] = self.cur_player()
         if self.is_five(coord):
             self.game_over = True
+            self.winner = "Black" if self.cur_player() == Color.BLACK else "White"
             logger.info(f"{self.cur_player().value} wins.")
         self.round += 1
 
@@ -299,6 +303,109 @@ class GomokuGame(BaseBoardGame):
             x += dx
             y += dy
         return count
+
+    def create_memento(self) -> Memento:
+        # Save the current state in a memento
+        state = {
+            "name": self.name,
+            "size": self.size,
+            "board": copy.deepcopy(self.board),
+            "round": self.round,
+            "game_over": self.game_over,
+            "winner": self.winner,
+            # "history": copy.deepcopy(self.history),
+        }
+        return Memento(state)
+
+    def restore_from_memento(self, memento: Memento):
+        # Restore the state from the memento
+        state = memento.get_saved_state()
+        self.name = state["name"]
+        self.size = state["size"]
+        self.board = state["board"]
+        self.round = state["round"]
+        self.game_over = state["game_over"]
+        self.winner = state["winner"]
+        # self.history = state["history"]
+
+    def save_to_file(self, file_path: str):
+        with open(file_path, "wb") as file:
+            pickle.dump(self.create_memento(), file)
+            logger.info("Game saved to file.")
+
+    def load_from_file(self, file_path: str):
+        with open(file_path, "rb") as file:
+            self.restore_from_memento(pickle.load(file))
+            logger.info("Game loaded from file.")
+
+
+class OthelloGame(BaseBoardGame):
+    def __init__(self, size: int):
+        logger.warning(f"only support size 8 for now, {size} will be ignored")
+        super().__init__(8)
+        self.name = "Othello Game"
+        # Initialize the board with the starting positions
+        mid = self.size // 2
+        self.board[mid - 1][mid - 1] = self.board[mid][mid] = Color.WHITE
+        self.board[mid - 1][mid] = self.board[mid][mid - 1] = Color.BLACK
+
+    def move(self, coord: tuple[int, int] | None):
+        if self.game_over:
+            return
+        if coord is None:
+            logger.warning("You cannot pass proactively.")
+            return
+        available_moves = self.check_available_moves()
+        if len(available_moves) == 0:
+            self.history.append(self.create_memento())
+            self.round += 1
+        else:
+            if coord in available_moves:
+                self.history.append(self.create_memento())
+                self.board[coord[0]][coord[1]] = self.cur_player()
+                self.clamp(coord, clear=True)
+                if self.check_game_over():
+                    self.game_over = True
+                    self.winner = "Black" if self.cur_player() == Color.BLACK else "White"
+                self.round += 1
+            else:
+                logger.warning("Invalid move.")
+
+    def check_game_over(self) -> bool:
+        # Implement the logic to check if the game is over
+        cur_available_moves = self.check_available_moves()
+        self.round += 1
+        next_available_moves = self.check_available_moves()
+        self.round -= 1
+        return len(cur_available_moves) == 0 and len(next_available_moves) == 0
+
+    def check_available_moves(self) -> list[tuple[int, int]]:
+        available_moves = []
+        for x in range(self.size):
+            for y in range(self.size):
+                if self.board[x][y] == Color.EMPTY and self.clamp((x, y), clear=False):
+                    available_moves.append((x, y))
+        return available_moves
+
+    def clamp(self, coord: tuple[int, int], clear: bool = False) -> bool:
+        directions = [(1, 0), (0, 1), (1, 1), (1, -1), (-1, 0), (0, -1), (-1, -1), (-1, 1)]
+        return any([self.clamp_direction(coord, d[0], d[1], clear=clear) for d in directions])
+
+    def clamp_direction(self, coord: tuple[int, int], dx: int, dy: int, clear: bool = False) -> bool:
+        x, y = coord
+        x += dx
+        y += dy
+        opposite_list = []
+        while 0 <= x < self.size and 0 <= y < self.size and self.board[x][y] == self.opposite_player():
+            opposite_list.append((x, y))
+            x += dx
+            y += dy
+        if 0 <= x < self.size and 0 <= y < self.size and self.board[x][y] == self.cur_player():
+            if clear:
+                for opposite in opposite_list:
+                    self.board[opposite[0]][opposite[1]] = self.cur_player()
+            return len(opposite_list) > 0
+        return False
 
     def create_memento(self) -> Memento:
         # Save the current state in a memento

@@ -4,7 +4,7 @@ import sys
 
 import pygame
 
-from board import BaseBoardGame, Color, GoGame, GomokuGame
+from board import BaseBoardGame, Color, GoGame, GomokuGame, OthelloGame
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -25,16 +25,19 @@ class Button:
         text_rect = text_surface.get_rect(center=self.rect.center)
         screen.blit(text_surface, text_rect)
 
-    def handle_event(self, event):
+    def handle_event(self, event) -> bool:
+        is_handle = False
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.rect.collidepoint(event.pos):
                 self.callback()
+                is_handle = True
+        return is_handle
 
 
 class BoardGameGUI:
     def __init__(self, grid_size: int = 40, sidebar_width: int = 300):
         # default go game with 19-way
-        self.game_list: list[BaseBoardGame] = [GoGame, GomokuGame]
+        self.game_list: list[BaseBoardGame] = [GoGame, GomokuGame, OthelloGame]
         self.cur_game_type = self.game_list[0]
         self.size = 19
         self.game: BaseBoardGame = self.cur_game_type(self.size)
@@ -112,99 +115,117 @@ class BoardGameGUI:
         sidebar_x = self.window_width - self.sidebar_width + int(60 * self.ratio)  # X position for all buttons
         self.buttons = [
             Button(
-                sidebar_x,
+                sidebar_x - int(30 * self.ratio),
                 self.window_height - int(480 * self.ratio),
-                int(85 * self.ratio),
+                int(80 * self.ratio),
                 int(50 * self.ratio),
                 self.ratio,
                 "Go",
                 self.init_go_game,
             ),
             Button(
-                sidebar_x + int(95 * self.ratio),
+                sidebar_x + int(86 * self.ratio) - int(30 * self.ratio),
                 self.window_height - int(480 * self.ratio),
-                int(85 * self.ratio),
+                int(80 * self.ratio),
                 int(50 * self.ratio),
                 self.ratio,
                 "Gomoku",
                 self.init_gomoku_game,
             ),
             Button(
-                sidebar_x,
-                self.window_height - int(420 * self.ratio),
+                sidebar_x + int(172 * self.ratio) - int(30 * self.ratio),
+                self.window_height - int(480 * self.ratio),
+                int(80 * self.ratio),
                 int(50 * self.ratio),
+                self.ratio,
+                "Othello",
+                self.init_othello_game,
+            ),
+            Button(
+                sidebar_x - int(30 * self.ratio),
+                self.window_height - int(420 * self.ratio),
+                int(60 * self.ratio),
+                int(50 * self.ratio),
+                self.ratio,
+                "8-way",
+                self.eight_way,
+            ),
+            Button(
+                sidebar_x + int(64 * self.ratio) - int(30 * self.ratio),
+                self.window_height - int(420 * self.ratio),
+                int(60 * self.ratio),
                 int(50 * self.ratio),
                 self.ratio,
                 "9-way",
                 self.nine_way,
             ),
             Button(
-                sidebar_x + int(65 * self.ratio),
+                sidebar_x + int(128 * self.ratio) - int(30 * self.ratio),
                 self.window_height - int(420 * self.ratio),
-                int(50 * self.ratio),
+                int(60 * self.ratio),
                 int(50 * self.ratio),
                 self.ratio,
                 "13-way",
                 self.thirteen_way,
             ),
             Button(
-                sidebar_x + int(130 * self.ratio),
+                sidebar_x + int(192 * self.ratio) - int(30 * self.ratio),
                 self.window_height - int(420 * self.ratio),
-                int(50 * self.ratio),
+                int(60 * self.ratio),
                 int(50 * self.ratio),
                 self.ratio,
                 "19-way",
                 self.nineteen_way,
             ),
             Button(
-                sidebar_x,
+                sidebar_x - int(30 * self.ratio),
                 self.window_height - int(360 * self.ratio),
-                int(180 * self.ratio),
+                int(252 * self.ratio),
                 int(50 * self.ratio),
                 self.ratio,
                 "Surrender",
                 self.surrender,
             ),
             Button(
-                sidebar_x,
+                sidebar_x - int(30 * self.ratio),
                 self.window_height - int(300 * self.ratio),
-                int(180 * self.ratio),
+                int(252 * self.ratio),
                 int(50 * self.ratio),
                 self.ratio,
                 "Undo",
                 self.undo_move,
             ),
             Button(
-                sidebar_x,
+                sidebar_x - int(30 * self.ratio),
                 self.window_height - int(240 * self.ratio),
-                int(180 * self.ratio),
+                int(252 * self.ratio),
                 int(50 * self.ratio),
                 self.ratio,
                 "Pass",
                 self.pass_turn,
             ),
             Button(
-                sidebar_x,
+                sidebar_x - int(30 * self.ratio),
                 self.window_height - int(180 * self.ratio),
-                int(180 * self.ratio),
+                int(252 * self.ratio),
                 int(50 * self.ratio),
                 self.ratio,
                 "Restart",
                 self.restart_game,
             ),
             Button(
-                sidebar_x,
+                sidebar_x - int(30 * self.ratio),
                 self.window_height - int(120 * self.ratio),
-                int(180 * self.ratio),
+                int(252 * self.ratio),
                 int(50 * self.ratio),
                 self.ratio,
                 "Save",
                 lambda: self.save_game_state(f"game_state.pickle"),
             ),
             Button(
-                sidebar_x,
+                sidebar_x - int(30 * self.ratio),
                 self.window_height - int(60 * self.ratio),
-                int(180 * self.ratio),
+                int(252 * self.ratio),
                 int(50 * self.ratio),
                 self.ratio,
                 "Load",
@@ -224,6 +245,19 @@ class BoardGameGUI:
 
     def init_gomoku_game(self):
         self.cur_game_type = self.game_list[1]
+        self.game = self.cur_game_type(self.size)
+        self.init_pygame()
+
+    def init_othello_game(self):
+        self.cur_game_type = self.game_list[2]
+        self.game = self.cur_game_type(self.size)
+        self.init_pygame()
+        self.eight_way()
+
+    def eight_way(self):
+        self.size = 8
+        self.ratio = 1.0 * self.size / 19
+        self.sidebar_width = self.orig_sidebar_width * self.ratio
         self.game = self.cur_game_type(self.size)
         self.init_pygame()
 
@@ -282,10 +316,13 @@ class BoardGameGUI:
                     running = False
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
+                        is_handle = False
                         for button in self.buttons:
-                            button.handle_event(event)
-                        pos = pygame.mouse.get_pos()
-                        self.handle_mouse_click(pos)
+                            if button.handle_event(event):
+                                is_handle = True
+                        if not is_handle:
+                            pos = pygame.mouse.get_pos()
+                            self.handle_mouse_click(pos)
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_u:
                         self.undo_move()
