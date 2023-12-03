@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import pickle
+import random
 from abc import ABC, abstractmethod
 from collections import deque
 from enum import Enum
@@ -19,14 +20,17 @@ class Color(Enum):
 
 
 class BaseBoardGame(ABC):
-    def __init__(self, size: int):
+    def __init__(self, size: int, player1_strategy: PlayerStrategy, player2_strategy: PlayerStrategy):
         self.name = ""
         self.size = size
         self.board = [[Color.EMPTY for _ in range(size)] for _ in range(size)]
+        self.player1_strategy = player1_strategy
+        self.player2_strategy = player2_strategy
         self.round = 0
         self.game_over = False
         self.winner = ""
         self.history: list[Memento] = []  # Use a list of Mementos for the history
+        self.allow_none_move = False
 
     def cur_player(self) -> Color:
         return Color.BLACK if self.round % 2 == 0 else Color.WHITE
@@ -37,6 +41,17 @@ class BaseBoardGame(ABC):
     @abstractmethod
     def move(self, coord: tuple[int, int] | None = None):
         raise NotImplementedError
+
+    @abstractmethod
+    def check_available_moves(self) -> list[tuple[int, int]]:
+        raise NotImplementedError
+
+    def cur_player_strategy(self) -> PlayerStrategy:
+        return self.player1_strategy if self.cur_player() == Color.BLACK else self.player2_strategy
+
+    def play_round(self):
+        move = self.cur_player_strategy().make_move(self)
+        self.move(move)
 
     def surrender(self):
         self.game_over = True
@@ -51,7 +66,7 @@ class BaseBoardGame(ABC):
             self.restart()
 
     def restart(self):
-        self.__init__(self.size)
+        self.__init__(self.size, self.player1_strategy, self.player2_strategy)
 
     @abstractmethod
     def create_memento(self) -> Memento:
@@ -80,17 +95,20 @@ class Memento:
 
 class GoGame(BaseBoardGame):
     # Rule 1: Go is played on a 19x19 square grid of points, by two players called Black and White.
-    def __init__(self, size: int):
+    def __init__(self, size: int, player1_strategy: PlayerStrategy, player2_strategy: PlayerStrategy):
         # Rule 2: Each point on the grid may be colored black, white or empty.
-        super().__init__(size)
+        super().__init__(size, player1_strategy, player2_strategy)
         self.name = "Go Game"
         self.komi = 6.5
         self.ko_point: tuple[int, int] | None = None
         self.last_move_captured = None
         self.abstention = 0
         self.final_score = ""
+        self.allow_none_move = True
 
     def move(self, coord: tuple[int, int] | None = None):
+        if coord not in self.check_available_moves():
+            return
         if self.game_over:
             return
         if coord is not None:
@@ -130,6 +148,14 @@ class GoGame(BaseBoardGame):
                 self.final_score = f"Black: {black_score}, White: {white_score}"
 
         self.round += 1
+
+    def check_available_moves(self) -> list[tuple[int, int] | None]:
+        available_moves = []
+        for x in range(self.size):
+            for y in range(self.size):
+                if self.board[x][y] == Color.EMPTY and (x, y) != self.ko_point:
+                    available_moves.append((x, y))
+        return available_moves
 
     def create_memento(self) -> Memento:
         # Save the current state in a memento
@@ -258,6 +284,8 @@ class GoGame(BaseBoardGame):
         return territory, borders
 
     def score(self):
+        if self.round <= 2:
+            return 0, self.komi
         # Rule 9: A player’s score is the number of points of her color, plus the number of empty points that reach only her color.
         black_captures, white_captures = self.remove_dead_stones()
         black_territory, white_territory = self.calculate_territory()
@@ -269,11 +297,13 @@ class GoGame(BaseBoardGame):
 
 
 class GomokuGame(BaseBoardGame):
-    def __init__(self, size: int):
-        super().__init__(size)
+    def __init__(self, size: int, player1_strategy: PlayerStrategy, player2_strategy: PlayerStrategy):
+        super().__init__(size, player1_strategy, player2_strategy)
         self.name = "Gomoku Game"
 
     def move(self, coord: tuple[int, int] | None = None):
+        if coord not in self.check_available_moves():
+            return
         if self.game_over:
             return
         if coord is None:
@@ -287,6 +317,14 @@ class GomokuGame(BaseBoardGame):
             self.winner = "Black" if self.cur_player() == Color.BLACK else "White"
             logger.info(f"{self.cur_player().value} wins.")
         self.round += 1
+
+    def check_available_moves(self) -> list[tuple[int, int]]:
+        available_moves = []
+        for x in range(self.size):
+            for y in range(self.size):
+                if self.board[x][y] == Color.EMPTY:
+                    available_moves.append((x, y))
+        return available_moves
 
     def is_five(self, coord: tuple[int, int]) -> bool:
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
@@ -340,9 +378,9 @@ class GomokuGame(BaseBoardGame):
 
 
 class OthelloGame(BaseBoardGame):
-    def __init__(self, size: int):
+    def __init__(self, size: int, player1_strategy: PlayerStrategy, player2_strategy: PlayerStrategy):
         logger.warning(f"only support size 8 for now, {size} will be ignored")
-        super().__init__(8)
+        super().__init__(8, player1_strategy, player2_strategy)
         self.name = "Othello Game"
         # Initialize the board with the starting positions
         mid = self.size // 2
@@ -440,3 +478,60 @@ class OthelloGame(BaseBoardGame):
         with open(file_path, "rb") as file:
             self.restore_from_memento(pickle.load(file))
             logger.info("Game loaded from file.")
+
+
+class PlayerStrategy(ABC):
+    role = None
+
+    @abstractmethod
+    def make_move(self, game: BaseBoardGame) -> tuple[int, int] | None:
+        pass
+
+
+class HumanPlayerStrategy(PlayerStrategy):
+    role = "Human"
+    move = None
+
+    def get_move(self, move: tuple[int, int] | None):
+        self.move = move
+
+    def make_move(self, game: BaseBoardGame) -> tuple[int, int] | None:
+        return self.move
+
+
+class Level1AIPlayerStrategy(PlayerStrategy):
+    role = "Level1 AI"
+
+    # Random Move
+    def make_move(self, game: BaseBoardGame) -> tuple[int, int] | None:
+        available_moves = game.check_available_moves()
+        if game.allow_none_move:
+            available_moves.append(None)
+        if len(available_moves) == 0:
+            return None
+        return random.choice(available_moves)
+
+
+class Level2AIPlayerStrategy(PlayerStrategy):
+    role = "Level2 AI"
+
+    # Simple Rules
+    def make_move(self, game: BaseBoardGame) -> tuple[int, int] | None:
+        available_moves = game.check_available_moves()
+        if game.allow_none_move:
+            available_moves.append(None)
+        if len(available_moves) == 0:
+            return None
+        return random.choice(available_moves)
+
+
+class Level3AIPlayerStrategy(PlayerStrategy):
+    role = "Level3 AI"
+
+    def make_move(self, game: BaseBoardGame) -> tuple[int, int] | None:
+        available_moves = game.check_available_moves()
+        if game.allow_none_move:
+            available_moves.append(None)
+        if len(available_moves) == 0:
+            return None
+        return random.choice(available_moves)

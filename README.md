@@ -441,5 +441,7 @@ if __name__ == "__main__":
 
 ![stage1](README.assets/stage1.png)
 
+### 第二阶段
 
+#### Othello Game
 

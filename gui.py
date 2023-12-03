@@ -1,10 +1,21 @@
 from __future__ import annotations
 
 import sys
+from time import sleep
 
 import pygame
 
-from board import BaseBoardGame, Color, GoGame, GomokuGame, OthelloGame
+from board import (
+    BaseBoardGame,
+    Color,
+    GoGame,
+    GomokuGame,
+    HumanPlayerStrategy,
+    OthelloGame,
+    Level1AIPlayerStrategy,
+    Level2AIPlayerStrategy,
+    Level3AIPlayerStrategy,
+)
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -40,7 +51,7 @@ class BoardGameGUI:
         self.game_list: list[BaseBoardGame] = [GoGame, GomokuGame, OthelloGame]
         self.cur_game_type = self.game_list[0]
         self.size = 19
-        self.game: BaseBoardGame = self.cur_game_type(self.size)
+        self.game: BaseBoardGame = self.cur_game_type(self.size, HumanPlayerStrategy(), HumanPlayerStrategy())
 
         self.ratio = 1.0 * self.size / 19
 
@@ -60,34 +71,43 @@ class BoardGameGUI:
         self.stone_radius = self.grid_size // 2 - 2
 
     def draw_current_game(self):
-        font = pygame.font.SysFont(None, int(30 * self.ratio))
+        font = pygame.font.SysFont(None, int(24 * self.ratio))
         text = font.render(f"{self.game.name}", True, BLACK)
         # Draw on the sidebar, not on the board
-        self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(10 * self.ratio)))
+        self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(20 * self.ratio)))
 
     def draw_current_player(self):
-        font = pygame.font.SysFont(None, int(30 * self.ratio))
+        font = pygame.font.SysFont(None, int(24 * self.ratio))
         if self.game.cur_player() == Color.BLACK:
-            text = font.render("Current Player: Black", True, BLACK)
+            text = font.render("Current Player: Black (Player1)", True, BLACK)
         else:
-            text = font.render("Current Player: White", True, WHITE)
+            text = font.render("Current Player: White (Player2)", True, WHITE)
         # Draw on the sidebar, not on the board
-        self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(40 * self.ratio)))
+        self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(50 * self.ratio)))
+
+    def draw_player_mode(self):
+        font = pygame.font.SysFont(None, int(24 * self.ratio))
+        text = font.render(f"Player1 Mode: {self.game.player1_strategy.role}", True, BLACK)
+        # Draw on the sidebar, not on the board
+        self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(80 * self.ratio)))
+        text = font.render(f"Player2 Mode: {self.game.player2_strategy.role}", True, WHITE)
+        # Draw on the sidebar, not on the board
+        self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(110 * self.ratio)))
 
     def draw_round(self):
-        font = pygame.font.SysFont(None, int(30 * self.ratio))
+        font = pygame.font.SysFont(None, int(24 * self.ratio))
         text = font.render(f"Current Round: {self.game.round}", True, BLACK)
         # Draw on the sidebar, not on the board
-        self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(70 * self.ratio)))
+        self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(140 * self.ratio)))
 
     def draw_winner(self):
-        font = pygame.font.SysFont(None, int(30 * self.ratio))
+        font = pygame.font.SysFont(None, int(24 * self.ratio))
         text = font.render(f"Winner: {self.game.winner}", True, BLACK)
         # Draw on the sidebar, not on the board
-        self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(100 * self.ratio)))
+        self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(170 * self.ratio)))
         if getattr(self.game, "final_score", "") != "":
             text = font.render(f"Score: {self.game.final_score}", True, BLACK)
-            self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(130 * self.ratio)))
+            self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(200 * self.ratio)))
 
     def draw_board(self):
         self.screen.fill(BACKGROUND)
@@ -117,116 +137,188 @@ class BoardGameGUI:
             Button(
                 sidebar_x - int(30 * self.ratio),
                 self.window_height - int(480 * self.ratio),
+                int(122 * self.ratio),
+                int(30 * self.ratio),
+                self.ratio,
+                "Human",
+                self.play1_human,
+            ),
+            Button(
+                sidebar_x + int(130 * self.ratio) - int(30 * self.ratio),
+                self.window_height - int(480 * self.ratio),
+                int(122 * self.ratio),
+                int(30 * self.ratio),
+                self.ratio,
+                "Human",
+                self.play2_human,
+            ),
+            Button(
+                sidebar_x - int(30 * self.ratio),
+                self.window_height - int(440 * self.ratio),
+                int(122 * self.ratio),
+                int(30 * self.ratio),
+                self.ratio,
+                "Level1 AI",
+                self.play1_level1_ai,
+            ),
+            Button(
+                sidebar_x + int(130 * self.ratio) - int(30 * self.ratio),
+                self.window_height - int(440 * self.ratio),
+                int(122 * self.ratio),
+                int(30 * self.ratio),
+                self.ratio,
+                "Level1 AI",
+                self.play2_level1_ai,
+            ),
+            Button(
+                sidebar_x - int(30 * self.ratio),
+                self.window_height - int(400 * self.ratio),
+                int(122 * self.ratio),
+                int(30 * self.ratio),
+                self.ratio,
+                "Level2 AI",
+                self.play1_level2_ai,
+            ),
+            Button(
+                sidebar_x + int(130 * self.ratio) - int(30 * self.ratio),
+                self.window_height - int(400 * self.ratio),
+                int(122 * self.ratio),
+                int(30 * self.ratio),
+                self.ratio,
+                "Level2 AI",
+                self.play2_level2_ai,
+            ),
+            Button(
+                sidebar_x - int(30 * self.ratio),
+                self.window_height - int(360 * self.ratio),
+                int(122 * self.ratio),
+                int(30 * self.ratio),
+                self.ratio,
+                "Level3 AI",
+                self.play1_level3_ai,
+            ),
+            Button(
+                sidebar_x + int(130 * self.ratio) - int(30 * self.ratio),
+                self.window_height - int(360 * self.ratio),
+                int(122 * self.ratio),
+                int(30 * self.ratio),
+                self.ratio,
+                "Level3 AI",
+                self.play2_level3_ai,
+            ),
+            Button(
+                sidebar_x - int(30 * self.ratio),
+                self.window_height - int(320 * self.ratio),
                 int(80 * self.ratio),
-                int(50 * self.ratio),
+                int(30 * self.ratio),
                 self.ratio,
                 "Go",
                 self.init_go_game,
             ),
             Button(
                 sidebar_x + int(86 * self.ratio) - int(30 * self.ratio),
-                self.window_height - int(480 * self.ratio),
+                self.window_height - int(320 * self.ratio),
                 int(80 * self.ratio),
-                int(50 * self.ratio),
+                int(30 * self.ratio),
                 self.ratio,
                 "Gomoku",
                 self.init_gomoku_game,
             ),
             Button(
                 sidebar_x + int(172 * self.ratio) - int(30 * self.ratio),
-                self.window_height - int(480 * self.ratio),
+                self.window_height - int(320 * self.ratio),
                 int(80 * self.ratio),
-                int(50 * self.ratio),
+                int(30 * self.ratio),
                 self.ratio,
                 "Othello",
                 self.init_othello_game,
             ),
             Button(
                 sidebar_x - int(30 * self.ratio),
-                self.window_height - int(420 * self.ratio),
+                self.window_height - int(280 * self.ratio),
                 int(60 * self.ratio),
-                int(50 * self.ratio),
+                int(30 * self.ratio),
                 self.ratio,
                 "8-way",
                 self.eight_way,
             ),
             Button(
                 sidebar_x + int(64 * self.ratio) - int(30 * self.ratio),
-                self.window_height - int(420 * self.ratio),
+                self.window_height - int(280 * self.ratio),
                 int(60 * self.ratio),
-                int(50 * self.ratio),
+                int(30 * self.ratio),
                 self.ratio,
                 "9-way",
                 self.nine_way,
             ),
             Button(
                 sidebar_x + int(128 * self.ratio) - int(30 * self.ratio),
-                self.window_height - int(420 * self.ratio),
+                self.window_height - int(280 * self.ratio),
                 int(60 * self.ratio),
-                int(50 * self.ratio),
+                int(30 * self.ratio),
                 self.ratio,
                 "13-way",
                 self.thirteen_way,
             ),
             Button(
                 sidebar_x + int(192 * self.ratio) - int(30 * self.ratio),
-                self.window_height - int(420 * self.ratio),
+                self.window_height - int(280 * self.ratio),
                 int(60 * self.ratio),
-                int(50 * self.ratio),
+                int(30 * self.ratio),
                 self.ratio,
                 "19-way",
                 self.nineteen_way,
             ),
             Button(
                 sidebar_x - int(30 * self.ratio),
-                self.window_height - int(360 * self.ratio),
+                self.window_height - int(240 * self.ratio),
                 int(252 * self.ratio),
-                int(50 * self.ratio),
+                int(30 * self.ratio),
                 self.ratio,
                 "Surrender",
                 self.surrender,
             ),
             Button(
                 sidebar_x - int(30 * self.ratio),
-                self.window_height - int(300 * self.ratio),
+                self.window_height - int(200 * self.ratio),
                 int(252 * self.ratio),
-                int(50 * self.ratio),
+                int(30 * self.ratio),
                 self.ratio,
                 "Undo",
                 self.undo_move,
             ),
             Button(
                 sidebar_x - int(30 * self.ratio),
-                self.window_height - int(240 * self.ratio),
+                self.window_height - int(160 * self.ratio),
                 int(252 * self.ratio),
-                int(50 * self.ratio),
+                int(30 * self.ratio),
                 self.ratio,
                 "Pass",
                 self.pass_turn,
             ),
             Button(
                 sidebar_x - int(30 * self.ratio),
-                self.window_height - int(180 * self.ratio),
+                self.window_height - int(120 * self.ratio),
                 int(252 * self.ratio),
-                int(50 * self.ratio),
+                int(30 * self.ratio),
                 self.ratio,
                 "Restart",
                 self.restart_game,
             ),
             Button(
                 sidebar_x - int(30 * self.ratio),
-                self.window_height - int(120 * self.ratio),
+                self.window_height - int(80 * self.ratio),
                 int(252 * self.ratio),
-                int(50 * self.ratio),
+                int(30 * self.ratio),
                 self.ratio,
                 "Save",
                 lambda: self.save_game_state(f"game_state.pickle"),
             ),
             Button(
                 sidebar_x - int(30 * self.ratio),
-                self.window_height - int(60 * self.ratio),
+                self.window_height - int(40 * self.ratio),
                 int(252 * self.ratio),
-                int(50 * self.ratio),
+                int(30 * self.ratio),
                 self.ratio,
                 "Load",
                 lambda: self.load_game_state("game_state.pickle"),
@@ -240,17 +332,17 @@ class BoardGameGUI:
 
     def init_go_game(self):
         self.cur_game_type = self.game_list[0]
-        self.game = self.cur_game_type(self.size)
+        self.game = self.cur_game_type(self.size, HumanPlayerStrategy(), HumanPlayerStrategy())
         self.init_pygame()
 
     def init_gomoku_game(self):
         self.cur_game_type = self.game_list[1]
-        self.game = self.cur_game_type(self.size)
+        self.game = self.cur_game_type(self.size, HumanPlayerStrategy(), HumanPlayerStrategy())
         self.init_pygame()
 
     def init_othello_game(self):
         self.cur_game_type = self.game_list[2]
-        self.game = self.cur_game_type(self.size)
+        self.game = self.cur_game_type(self.size, HumanPlayerStrategy(), HumanPlayerStrategy())
         self.init_pygame()
         self.eight_way()
 
@@ -258,29 +350,53 @@ class BoardGameGUI:
         self.size = 8
         self.ratio = 1.0 * self.size / 19
         self.sidebar_width = self.orig_sidebar_width * self.ratio
-        self.game = self.cur_game_type(self.size)
+        self.game = self.cur_game_type(self.size, HumanPlayerStrategy(), HumanPlayerStrategy())
         self.init_pygame()
 
     def nine_way(self):
         self.size = 9
         self.ratio = 1.0 * self.size / 19
         self.sidebar_width = self.orig_sidebar_width * self.ratio
-        self.game = self.cur_game_type(self.size)
+        self.game = self.cur_game_type(self.size, HumanPlayerStrategy(), HumanPlayerStrategy())
         self.init_pygame()
 
     def thirteen_way(self):
         self.size = 13
         self.ratio = 1.0 * self.size / 19
         self.sidebar_width = self.orig_sidebar_width * self.ratio
-        self.game = self.cur_game_type(self.size)
+        self.game = self.cur_game_type(self.size, HumanPlayerStrategy(), HumanPlayerStrategy())
         self.init_pygame()
 
     def nineteen_way(self):
         self.size = 19
         self.ratio = 1.0 * self.size / 19
         self.sidebar_width = self.orig_sidebar_width * self.ratio
-        self.game = self.cur_game_type(self.size)
+        self.game = self.cur_game_type(self.size, HumanPlayerStrategy(), HumanPlayerStrategy())
         self.init_pygame()
+
+    def play1_human(self):
+        self.game.player1_strategy = HumanPlayerStrategy()
+
+    def play1_level1_ai(self):
+        self.game.player1_strategy = Level1AIPlayerStrategy()
+
+    def play1_level2_ai(self):
+        self.game.player1_strategy = Level2AIPlayerStrategy()
+
+    def play1_level3_ai(self):
+        self.game.player1_strategy = Level3AIPlayerStrategy()
+
+    def play2_human(self):
+        self.game.player2_strategy = HumanPlayerStrategy()
+
+    def play2_level1_ai(self):
+        self.game.player2_strategy = Level1AIPlayerStrategy()
+
+    def play2_level2_ai(self):
+        self.game.player2_strategy = Level2AIPlayerStrategy()
+
+    def play2_level3_ai(self):
+        self.game.player2_strategy = Level3AIPlayerStrategy()
 
     def surrender(self):
         self.game.surrender()
@@ -306,10 +422,22 @@ class BoardGameGUI:
         col = round((x - self.grid_size) / self.grid_size)
 
         if 0 <= row < self.game.size and 0 <= col < self.game.size and self.game.board[row][col] == Color.EMPTY:
-            self.game.move((row, col))
+            self.game.cur_player_strategy().get_move((row, col))
+
+    def update_gui(self):
+        self.create_buttons()
+        self.draw_board()
+        self.draw_current_game()
+        self.draw_current_player()
+        self.draw_player_mode()
+        self.draw_round()
+        self.draw_winner()
+        self.draw_buttons()
+        pygame.display.flip()
 
     def start_game(self):
         running = True
+        block = False
         while running:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -322,7 +450,9 @@ class BoardGameGUI:
                                 is_handle = True
                         if not is_handle:
                             pos = pygame.mouse.get_pos()
-                            self.handle_mouse_click(pos)
+                            if self.game.cur_player_strategy().role == "Human":
+                                self.handle_mouse_click(pos)
+                                self.game.play_round()
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_u:
                         self.undo_move()
@@ -336,14 +466,17 @@ class BoardGameGUI:
                         self.load_game_state("game_state.pickle")
                     elif event.key == pygame.K_q:
                         running = False
-                self.create_buttons()
-                self.draw_board()
-                self.draw_current_game()
-                self.draw_current_player()
-                self.draw_round()
-                self.draw_winner()
-                self.draw_buttons()
-            pygame.display.flip()
+                    elif event.key == pygame.K_t:
+                        block = True
+                    elif event.key == pygame.K_c:
+                        block = False
+                self.update_gui()
+            if block:
+                continue
+            if "AI" in self.game.cur_player_strategy().role:
+                sleep(0.1)
+                self.game.play_round()
+                self.update_gui()
 
         pygame.quit()
         sys.exit()
