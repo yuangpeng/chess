@@ -5,7 +5,9 @@ from time import sleep
 
 import pygame
 import pygame_gui
+from loguru import logger
 
+from account import AccountManager
 from board import (
     BaseBoardGame,
     Color,
@@ -47,7 +49,7 @@ class Button:
 
 
 class BoardGameGUI:
-    def __init__(self, grid_size: int = 40, sidebar_width: int = 300):
+    def __init__(self, grid_size: int = 40, sidebar_width: int = 300, account_file: str = "account.json"):
         # default go game with 19-way
         self.game_list: list[BaseBoardGame] = [GoGame, GomokuGame, OthelloGame]
         self.cur_game_type = self.game_list[0]
@@ -59,6 +61,123 @@ class BoardGameGUI:
         self.grid_size = grid_size
         self.orig_sidebar_width = sidebar_width
         self.sidebar_width = sidebar_width
+
+        self.init_pygame()
+        self.account_manager = AccountManager(account_file)
+        self.user1 = None
+        self.user2 = None
+        self.user1_login = False
+        self.user2_login = False
+        # Call the login method at the start
+        self.login()
+        if self.user1 == "AI":
+            self.play1_level1_ai()
+        if self.user2 == "AI":
+            self.play2_level1_ai()
+
+    def login(self):
+        # Create login interface
+        self.login_screen = pygame.display.set_mode((600, 250))
+        self.username_input1 = pygame_gui.elements.UITextEntryLine(relative_rect=pygame.Rect((50, 50), (200, 30)), manager=self.manager)
+        self.password_input1 = pygame_gui.elements.UITextEntryLine(relative_rect=pygame.Rect((50, 100), (200, 30)), manager=self.manager)
+        self.login_button1 = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((50, 150), (100, 30)), text="Login", manager=self.manager)
+        self.register_button1 = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((150, 150), (100, 30)), text="Register", manager=self.manager)
+        self.ai_button1 = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((50, 200), (100, 30)), text="AI", manager=self.manager)
+        self.visitor_button1 = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((150, 200), (100, 30)), text="Visitor", manager=self.manager)
+        self.username_input2 = pygame_gui.elements.UITextEntryLine(relative_rect=pygame.Rect((350, 50), (200, 30)), manager=self.manager)
+        self.password_input2 = pygame_gui.elements.UITextEntryLine(relative_rect=pygame.Rect((350, 100), (200, 30)), manager=self.manager)
+        self.login_button2 = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((350, 150), (100, 30)), text="Login", manager=self.manager)
+        self.register_button2 = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((450, 150), (100, 30)), text="Register", manager=self.manager)
+        self.ai_button2 = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((350, 200), (100, 30)), text="AI", manager=self.manager)
+        self.visitor_button2 = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((450, 200), (100, 30)), text="Visitor", manager=self.manager)
+
+        user1_msg = None
+        user2_msg = None
+        while not self.user1_login or not self.user2_login:
+            time_delta = self.clock.tick(60) / 1000.0
+            for event in pygame.event.get():
+                self.manager.process_events(event)
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                elif event.type == pygame_gui.UI_BUTTON_PRESSED:
+                    if event.ui_element == self.login_button1:
+                        # Validate login credentials
+                        username = self.username_input1.get_text()
+                        password = self.password_input1.get_text()
+                        if self.account_manager.login(username, password):
+                            self.user1_login = True
+                            self.user1 = username
+                            user1_msg = "Login successful"
+                        else:
+                            user1_msg = "Invalid username or password!"
+                            logger.warning(user1_msg)  # Replace with a proper on-screen message
+                    elif event.ui_element == self.login_button2:
+                        # Validate login credentials
+                        username = self.username_input2.get_text()
+                        password = self.password_input2.get_text()
+                        if self.account_manager.login(username, password):
+                            self.user2_login = True
+                            self.user2 = username
+                            user2_msg = "Login successful"
+                        else:
+                            user2_msg = "Invalid username or password!"
+                            logger.warning(user2_msg)  # Replace with a proper on-screen message
+                    elif event.ui_element == self.register_button1:
+                        username = self.username_input1.get_text()
+                        password = self.password_input1.get_text()
+                        if self.account_manager.register(username, password):
+                            user1_msg = "Register successful"
+                            logger.info(user2_msg)
+                            self.user1_login = True
+                            self.user1 = username
+                        else:
+                            user1_msg = "Username already exists"
+                            logger.warning(user1_msg)
+                    elif event.ui_element == self.register_button2:
+                        username = self.username_input2.get_text()
+                        password = self.password_input2.get_text()
+                        if self.account_manager.register(username, password):
+                            user2_msg = "Register successful"
+                            logger.info(user2_msg)
+                            self.user2_login = True
+                            self.user2 = username
+                        else:
+                            user2_msg = "Username already exists"
+                            logger.warning(user2_msg)
+                    elif event.ui_element == self.ai_button1:
+                        self.user1_login = True
+                        self.user1 = "AI"
+                        user1_msg = "Login successful"
+                    elif event.ui_element == self.ai_button2:
+                        self.user2_login = True
+                        self.user2 = "AI"
+                        user2_msg = "Login successful"
+                    elif event.ui_element == self.visitor_button1:
+                        self.user1_login = True
+                        self.user1 = "Visitor"
+                        user1_msg = "Login successful"
+                    elif event.ui_element == self.visitor_button2:
+                        self.user2_login = True
+                        self.user2 = "Visitor"
+                        user2_msg = "Login successful"
+
+            self.manager.update(time_delta)
+            self.login_screen.fill(BACKGROUND)
+            self.manager.draw_ui(self.login_screen)
+
+            if user1_msg is not None:
+                font = pygame.font.SysFont(None, 20)
+                text = font.render(f"{user1_msg}", True, BLACK)
+                # Draw on the sidebar, not on the board
+                self.login_screen.blit(text, pygame.Rect((50, 20), (200, 30)))
+            if user2_msg is not None:
+                font = pygame.font.SysFont(None, 20)
+                text = font.render(f"{user2_msg}", True, BLACK)
+                # Draw on the sidebar, not on the board
+                self.login_screen.blit(text, pygame.Rect((350, 20), (200, 30)))
+
+            pygame.display.flip()
 
         self.init_pygame()
 
@@ -91,10 +210,13 @@ class BoardGameGUI:
 
     def draw_player_mode(self):
         font = pygame.font.SysFont(None, int(24 * self.ratio))
-        text = font.render(f"Player1 Mode: {self.game.player1_strategy.role}", True, BLACK)
+        role1 = self.game.player1_strategy.role if self.user1 == "AI" else self.user1
+        text = font.render(f"Player1 Mode: {role1}", True, BLACK)
         # Draw on the sidebar, not on the board
         self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(80 * self.ratio)))
-        text = font.render(f"Player2 Mode: {self.game.player2_strategy.role}", True, WHITE)
+
+        role2 = self.game.player2_strategy.role if self.user2 == "AI" else self.user2
+        text = font.render(f"Player2 Mode: {role2}", True, WHITE)
         # Draw on the sidebar, not on the board
         self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(110 * self.ratio)))
 
@@ -401,28 +523,36 @@ class BoardGameGUI:
         self.init_pygame()
 
     def play1_human(self):
-        self.game.player1_strategy = HumanPlayerStrategy()
+        if self.user1 != "AI":
+            self.game.player1_strategy = HumanPlayerStrategy()
 
     def play1_level1_ai(self):
-        self.game.player1_strategy = Level1AIPlayerStrategy()
+        if self.user1 == "AI":
+            self.game.player1_strategy = Level1AIPlayerStrategy()
 
     def play1_level2_ai(self):
-        self.game.player1_strategy = Level2AIPlayerStrategy()
+        if self.user1 == "AI":
+            self.game.player1_strategy = Level2AIPlayerStrategy()
 
     def play1_level3_ai(self):
-        self.game.player1_strategy = Level3AIPlayerStrategy()
+        if self.user1 == "AI":
+            self.game.player1_strategy = Level3AIPlayerStrategy()
 
     def play2_human(self):
-        self.game.player2_strategy = HumanPlayerStrategy()
+        if self.user2 != "AI":
+            self.game.player2_strategy = HumanPlayerStrategy()
 
     def play2_level1_ai(self):
-        self.game.player2_strategy = Level1AIPlayerStrategy()
+        if self.user2 == "AI":
+            self.game.player2_strategy = Level1AIPlayerStrategy()
 
     def play2_level2_ai(self):
-        self.game.player2_strategy = Level2AIPlayerStrategy()
+        if self.user2 == "AI":
+            self.game.player2_strategy = Level2AIPlayerStrategy()
 
     def play2_level3_ai(self):
-        self.game.player2_strategy = Level3AIPlayerStrategy()
+        if self.user2 == "AI":
+            self.game.player2_strategy = Level3AIPlayerStrategy()
 
     def surrender(self):
         self.game.surrender()
@@ -432,6 +562,7 @@ class BoardGameGUI:
 
     def restart_game(self):
         self.game.restart()
+        self.update_record = False
 
     def pass_turn(self):
         self.game.move(None)
@@ -448,7 +579,10 @@ class BoardGameGUI:
         col = round((x - self.grid_size) / self.grid_size)
 
         if 0 <= row < self.game.size and 0 <= col < self.game.size and self.game.board[row][col] == Color.EMPTY:
+            logger.info((row, col))
             self.game.cur_player_strategy().get_move((row, col))
+            return True
+        return False
 
     def update_gui(self):
         self.create_buttons()
@@ -466,15 +600,26 @@ class BoardGameGUI:
     def start_game(self):
         running = True
         block = False
+        self.update_record = False
         while running:
             for event in pygame.event.get():
+                if getattr(self, "save_dialog", None):
+                    if len(self.save_dialog.groups()) == 0:
+                        del self.save_dialog
+                        self.activate_dialog = False
+                if getattr(self, "load_dialog", None):
+                    if len(self.load_dialog.groups()) == 0:
+                        del self.load_dialog
+                        self.activate_dialog = False
                 self.manager.process_events(event)
                 # Handle the save and load dialog events
                 if event.type == pygame_gui.UI_FILE_DIALOG_PATH_PICKED:
                     if event.ui_element == self.save_dialog:
                         self.save_game_state(event.text)
+                        del self.save_dialog
                     elif event.ui_element == self.load_dialog:
                         self.load_game_state(event.text)
+                        del self.load_dialog
                     self.activate_dialog = False
                 elif event.type == pygame.QUIT:
                     running = False
@@ -489,8 +634,8 @@ class BoardGameGUI:
                         if not is_handle:
                             pos = pygame.mouse.get_pos()
                             if self.game.cur_player_strategy().role == "Human":
-                                self.handle_mouse_click(pos)
-                                self.game.play_round()
+                                if self.handle_mouse_click(pos):
+                                    self.game.play_round()
                 elif event.type == pygame.KEYDOWN:
                     if self.activate_dialog:
                         continue
@@ -514,6 +659,12 @@ class BoardGameGUI:
 
             if block:
                 continue
+            if self.game.game_over and not self.update_record:
+                self.update_record = True
+                if self.user1 != "AI" and self.user1 != "Visitor":
+                    self.account_manager.update_record(self.user1, self.game.name.split(" ")[0].lower(), self.game.winner == "Black")
+                if self.user2 != "AI" and self.user2 != "Visitor":
+                    self.account_manager.update_record(self.user2, self.game.name.split(" ")[0].lower(), self.game.winner == "White")
             if "AI" in self.game.cur_player_strategy().role:
                 sleep(0.01)
                 self.game.play_round()

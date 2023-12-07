@@ -103,6 +103,6 @@ class AccountManager:
 if __name__ == "__main__":
     account_manager = AccountManager()
     account_manager.register("test", "test")
-    account_manager.login("test", "test")
+    account_manager.login("test", "test1")
     account_manager.update_record("test", "go", True)
     print(account_manager.get_record("test"))
