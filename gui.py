@@ -4,6 +4,7 @@ import sys
 from time import sleep
 
 import pygame
+import pygame_gui
 
 from board import (
     BaseBoardGame,
@@ -11,10 +12,10 @@ from board import (
     GoGame,
     GomokuGame,
     HumanPlayerStrategy,
-    OthelloGame,
     Level1AIPlayerStrategy,
     Level2AIPlayerStrategy,
     Level3AIPlayerStrategy,
+    OthelloGame,
 )
 
 BLACK = (0, 0, 0)
@@ -69,6 +70,9 @@ class BoardGameGUI:
         self.screen = pygame.display.set_mode((self.window_width, self.window_height))
         pygame.display.set_caption(f"{self.game.name}")
         self.stone_radius = self.grid_size // 2 - 2
+        self.clock = pygame.time.Clock()
+        self.manager = pygame_gui.UIManager((self.window_width, self.window_height))
+        self.activate_dialog = False
 
     def draw_current_game(self):
         font = pygame.font.SysFont(None, int(24 * self.ratio))
@@ -312,7 +316,7 @@ class BoardGameGUI:
                 int(30 * self.ratio),
                 self.ratio,
                 "Save",
-                lambda: self.save_game_state(f"game_state.pickle"),
+                self.open_save_dialog,
             ),
             Button(
                 sidebar_x - int(30 * self.ratio),
@@ -321,9 +325,31 @@ class BoardGameGUI:
                 int(30 * self.ratio),
                 self.ratio,
                 "Load",
-                lambda: self.load_game_state("game_state.pickle"),
+                self.open_load_dialog,
             ),
         ]
+
+    def open_save_dialog(self):
+        # Create a file dialog to save the file
+        self.save_dialog = pygame_gui.windows.UIFileDialog(
+            rect=pygame.Rect((100, 100), (400, 500)),
+            manager=self.manager,
+            window_title="Save Game State",
+            initial_file_path="game_state.pickle",
+            allow_existing_files_only=False,
+        )
+        self.activate_dialog = True
+
+    def open_load_dialog(self):
+        # Create a file dialog to load the file
+        self.load_dialog = pygame_gui.windows.UIFileDialog(
+            rect=pygame.Rect((100, 100), (400, 500)),
+            manager=self.manager,
+            window_title="Load Game State",
+            initial_file_path="game_state.pickle",
+            allow_existing_files_only=True,
+        )
+        self.activate_dialog = True
 
     def draw_buttons(self):
         # Draw buttons in the sidebar
@@ -433,6 +459,8 @@ class BoardGameGUI:
         self.draw_round()
         self.draw_winner()
         self.draw_buttons()
+        self.manager.update(self.clock.tick(60) / 1000.0)
+        self.manager.draw_ui(self.screen)  # Draw the UI
         pygame.display.flip()
 
     def start_game(self):
@@ -440,9 +468,19 @@ class BoardGameGUI:
         block = False
         while running:
             for event in pygame.event.get():
-                if event.type == pygame.QUIT:
+                self.manager.process_events(event)
+                # Handle the save and load dialog events
+                if event.type == pygame_gui.UI_FILE_DIALOG_PATH_PICKED:
+                    if event.ui_element == self.save_dialog:
+                        self.save_game_state(event.text)
+                    elif event.ui_element == self.load_dialog:
+                        self.load_game_state(event.text)
+                    self.activate_dialog = False
+                elif event.type == pygame.QUIT:
                     running = False
                 elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if self.activate_dialog:
+                        continue
                     if event.button == 1:
                         is_handle = False
                         for button in self.buttons:
@@ -454,6 +492,8 @@ class BoardGameGUI:
                                 self.handle_mouse_click(pos)
                                 self.game.play_round()
                 elif event.type == pygame.KEYDOWN:
+                    if self.activate_dialog:
+                        continue
                     if event.key == pygame.K_u:
                         self.undo_move()
                     elif event.key == pygame.K_r:
@@ -461,9 +501,9 @@ class BoardGameGUI:
                     elif event.key == pygame.K_p:
                         self.pass_turn()
                     elif event.key == pygame.K_s:
-                        self.save_game_state("game_state.pickle")
+                        self.open_save_dialog()
                     elif event.key == pygame.K_l:
-                        self.load_game_state("game_state.pickle")
+                        self.open_load_dialog()
                     elif event.key == pygame.K_q:
                         running = False
                     elif event.key == pygame.K_t:
@@ -471,10 +511,11 @@ class BoardGameGUI:
                     elif event.key == pygame.K_c:
                         block = False
                 self.update_gui()
+
             if block:
                 continue
             if "AI" in self.game.cur_player_strategy().role:
-                sleep(0.1)
+                sleep(0.01)
                 self.game.play_round()
                 self.update_gui()
 
