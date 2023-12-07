@@ -1,7 +1,7 @@
 {
     "admin": {
         "password": "406fcac71f9acff4426d555a006e26abc0927fe59dd61b71f63672ff4fcb62bf385162ca3f0d2415ed66bf0271ab89deb6095a706a61aef4ee01f999eb128955",
-        "go_games_played": 3,
+        "go_games_played": 5,
         "go_wins": 0,
         "gomoku_games_played": 0,
         "gomoku_wins": 0,
@@ -19,8 +19,8 @@
     },
     "a": {
         "password": "b60b7beae5f58d81a4c747a6a6d5844de76c33b250ce9022fd0ab814e25c8fe97b4960ac1f4662388edcc92296cf3dfb80c7bcc12d39cdc62b60f0a1c83f7395",
-        "go_games_played": 3,
-        "go_wins": 3,
+        "go_games_played": 5,
+        "go_wins": 5,
         "gomoku_games_played": 0,
         "gomoku_wins": 0,
         "othello_games_played": 0,

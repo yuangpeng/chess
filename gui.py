@@ -210,12 +210,26 @@ class BoardGameGUI:
 
     def draw_player_mode(self):
         font = pygame.font.SysFont(None, int(24 * self.ratio))
-        role1 = self.game.player1_strategy.role if self.user1 == "AI" else self.user1
+        if self.user1 == "AI":
+            role1 = self.game.player1_strategy.role
+        else:
+            record = self.account_manager.get_record(self.user1)
+            role1 = (
+                self.user1
+                + f"({record['go_wins']}/{record['go_games_played']}, {record['gomoku_wins']}/{record['gomoku_games_played']}, {record['othello_wins']}/{record['othello_games_played']})"
+            )
         text = font.render(f"Player1 Mode: {role1}", True, BLACK)
         # Draw on the sidebar, not on the board
         self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(80 * self.ratio)))
 
-        role2 = self.game.player2_strategy.role if self.user2 == "AI" else self.user2
+        if self.user2 == "AI":
+            role2 = self.game.player2_strategy.role
+        else:
+            record = self.account_manager.get_record(self.user2)
+            role2 = (
+                self.user2
+                + f"({record['go_wins']}/{record['go_games_played']}, {record['gomoku_wins']}/{record['gomoku_games_played']}, {record['othello_wins']}/{record['othello_games_played']})"
+            )
         text = font.render(f"Player2 Mode: {role2}", True, WHITE)
         # Draw on the sidebar, not on the board
         self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(110 * self.ratio)))
@@ -579,7 +593,6 @@ class BoardGameGUI:
         col = round((x - self.grid_size) / self.grid_size)
 
         if 0 <= row < self.game.size and 0 <= col < self.game.size and self.game.board[row][col] == Color.EMPTY:
-            logger.info((row, col))
             self.game.cur_player_strategy().get_move((row, col))
             return True
         return False
