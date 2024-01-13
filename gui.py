@@ -210,7 +210,7 @@ class BoardGameGUI:
 
     def draw_player_mode(self):
         font = pygame.font.SysFont(None, int(24 * self.ratio))
-        if self.user1 != "Human":
+        if self.user1 == "AI" or self.user1 == "Visitor":
             role1 = self.game.player1_strategy.role
         else:
             record = self.account_manager.get_record(self.user1)
@@ -222,7 +222,7 @@ class BoardGameGUI:
         # Draw on the sidebar, not on the board
         self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(80 * self.ratio)))
 
-        if self.user2 != "Human":
+        if self.user2 == "AI" or self.user2 == "Visitor":
             role2 = self.game.player2_strategy.role
         else:
             record = self.account_manager.get_record(self.user2)
@@ -274,6 +274,15 @@ class BoardGameGUI:
         # Create buttons in the sidebar
         sidebar_x = self.window_width - self.sidebar_width + int(60 * self.ratio)  # X position for all buttons
         self.buttons = [
+            Button(
+                sidebar_x - int(30 * self.ratio),
+                self.window_height - int(520 * self.ratio),
+                int(252 * self.ratio),
+                int(30 * self.ratio),
+                self.ratio,
+                "Re-login",
+                self.__init__,
+            ),
             Button(
                 sidebar_x - int(30 * self.ratio),
                 self.window_height - int(480 * self.ratio),
