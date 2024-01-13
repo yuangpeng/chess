@@ -54,7 +54,7 @@ class BoardGameGUI:
         self.game_list: list[BaseBoardGame] = [GoGame, GomokuGame, OthelloGame]
         self.cur_game_type = self.game_list[0]
         self.size = 19
-        self.game: BaseBoardGame = self.cur_game_type(self.size, HumanPlayerStrategy(), HumanPlayerStrategy())
+        self.game: BaseBoardGame = self.cur_game_type(self.size, HumanPlayerStrategy(Color.BLACK), HumanPlayerStrategy(Color.WHITE))
 
         self.ratio = 1.0 * self.size / 19
 
@@ -210,7 +210,7 @@ class BoardGameGUI:
 
     def draw_player_mode(self):
         font = pygame.font.SysFont(None, int(24 * self.ratio))
-        if self.user1 == "AI":
+        if self.user1 != "Human":
             role1 = self.game.player1_strategy.role
         else:
             record = self.account_manager.get_record(self.user1)
@@ -222,7 +222,7 @@ class BoardGameGUI:
         # Draw on the sidebar, not on the board
         self.screen.blit(text, (self.window_width - self.sidebar_width + int(5 * self.ratio), int(80 * self.ratio)))
 
-        if self.user2 == "AI":
+        if self.user2 != "Human":
             role2 = self.game.player2_strategy.role
         else:
             record = self.account_manager.get_record(self.user2)
@@ -494,17 +494,17 @@ class BoardGameGUI:
 
     def init_go_game(self):
         self.cur_game_type = self.game_list[0]
-        self.game = self.cur_game_type(self.size, HumanPlayerStrategy(), HumanPlayerStrategy())
+        self.game = self.cur_game_type(self.size, self.game.player1_strategy, self.game.player2_strategy)
         self.init_pygame()
 
     def init_gomoku_game(self):
         self.cur_game_type = self.game_list[1]
-        self.game = self.cur_game_type(self.size, HumanPlayerStrategy(), HumanPlayerStrategy())
+        self.game = self.cur_game_type(self.size, self.game.player1_strategy, self.game.player2_strategy)
         self.init_pygame()
 
     def init_othello_game(self):
         self.cur_game_type = self.game_list[2]
-        self.game = self.cur_game_type(self.size, HumanPlayerStrategy(), HumanPlayerStrategy())
+        self.game = self.cur_game_type(self.size, self.game.player1_strategy, self.game.player2_strategy)
         self.init_pygame()
         self.eight_way()
 
@@ -512,61 +512,61 @@ class BoardGameGUI:
         self.size = 8
         self.ratio = 1.0 * self.size / 19
         self.sidebar_width = self.orig_sidebar_width * self.ratio
-        self.game = self.cur_game_type(self.size, HumanPlayerStrategy(), HumanPlayerStrategy())
+        self.game = self.cur_game_type(self.size, self.game.player1_strategy, self.game.player2_strategy)
         self.init_pygame()
 
     def nine_way(self):
         self.size = 9
         self.ratio = 1.0 * self.size / 19
         self.sidebar_width = self.orig_sidebar_width * self.ratio
-        self.game = self.cur_game_type(self.size, HumanPlayerStrategy(), HumanPlayerStrategy())
+        self.game = self.cur_game_type(self.size, self.game.player1_strategy, self.game.player2_strategy)
         self.init_pygame()
 
     def thirteen_way(self):
         self.size = 13
         self.ratio = 1.0 * self.size / 19
         self.sidebar_width = self.orig_sidebar_width * self.ratio
-        self.game = self.cur_game_type(self.size, HumanPlayerStrategy(), HumanPlayerStrategy())
+        self.game = self.cur_game_type(self.size, self.game.player1_strategy, self.game.player2_strategy)
         self.init_pygame()
 
     def nineteen_way(self):
         self.size = 19
         self.ratio = 1.0 * self.size / 19
         self.sidebar_width = self.orig_sidebar_width * self.ratio
-        self.game = self.cur_game_type(self.size, HumanPlayerStrategy(), HumanPlayerStrategy())
+        self.game = self.cur_game_type(self.size, self.game.player1_strategy, self.game.player2_strategy)
         self.init_pygame()
 
     def play1_human(self):
         if self.user1 != "AI":
-            self.game.player1_strategy = HumanPlayerStrategy()
+            self.game.player1_strategy = HumanPlayerStrategy(Color.BLACK)
 
     def play1_level1_ai(self):
         if self.user1 == "AI":
-            self.game.player1_strategy = Level1AIPlayerStrategy()
+            self.game.player1_strategy = Level1AIPlayerStrategy(Color.BLACK)
 
     def play1_level2_ai(self):
         if self.user1 == "AI":
-            self.game.player1_strategy = Level2AIPlayerStrategy()
+            self.game.player1_strategy = Level2AIPlayerStrategy(Color.BLACK)
 
     def play1_level3_ai(self):
         if self.user1 == "AI":
-            self.game.player1_strategy = Level3AIPlayerStrategy()
+            self.game.player1_strategy = Level3AIPlayerStrategy(Color.BLACK)
 
     def play2_human(self):
         if self.user2 != "AI":
-            self.game.player2_strategy = HumanPlayerStrategy()
+            self.game.player2_strategy = HumanPlayerStrategy(Color.WHITE)
 
     def play2_level1_ai(self):
         if self.user2 == "AI":
-            self.game.player2_strategy = Level1AIPlayerStrategy()
+            self.game.player2_strategy = Level1AIPlayerStrategy(Color.WHITE)
 
     def play2_level2_ai(self):
         if self.user2 == "AI":
-            self.game.player2_strategy = Level2AIPlayerStrategy()
+            self.game.player2_strategy = Level2AIPlayerStrategy(Color.WHITE)
 
     def play2_level3_ai(self):
         if self.user2 == "AI":
-            self.game.player2_strategy = Level3AIPlayerStrategy()
+            self.game.player2_strategy = Level3AIPlayerStrategy(Color.WHITE)
 
     def surrender(self):
         self.game.surrender()

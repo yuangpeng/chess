@@ -107,8 +107,9 @@ class GoGame(BaseBoardGame):
         self.allow_none_move = True
 
     def move(self, coord: tuple[int, int] | None = None):
-        if coord not in self.check_available_moves():
-            return
+        if coord is not None:
+            if coord not in self.check_available_moves():
+                return
         if self.game_over:
             return
         if coord is not None:
@@ -326,11 +327,17 @@ class GomokuGame(BaseBoardGame):
                     available_moves.append((x, y))
         return available_moves
 
-    def is_five(self, coord: tuple[int, int]) -> bool:
+    def is_five(self, coord: tuple[int, int], return_max_count: bool = False) -> bool:
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
+        count = 1
         for d in directions:
+            count = max(self.count_in_direction(coord, d[0], d[1]) + self.count_in_direction(coord, -d[0], -d[1]) - 1, count)
             if self.count_in_direction(coord, d[0], d[1]) + self.count_in_direction(coord, -d[0], -d[1]) - 1 >= 5:
+                if return_max_count:
+                    return True, count
                 return True
+        if return_max_count:
+            return False, count
         return False
 
     def count_in_direction(self, start: tuple[int, int], dx: int, dy: int) -> int:
@@ -390,9 +397,9 @@ class OthelloGame(BaseBoardGame):
     def move(self, coord: tuple[int, int] | None):
         if self.game_over:
             return
-        if coord is None:
-            logger.warning("You cannot pass proactively.")
-            return
+        # if coord is None:
+        #     logger.warning("You cannot pass proactively.")
+        #     return
         available_moves = self.check_available_moves()
         if len(available_moves) == 0:
             self.history.append(self.create_memento())
@@ -404,10 +411,24 @@ class OthelloGame(BaseBoardGame):
                 self.clamp(coord, clear=True)
                 if self.check_game_over():
                     self.game_over = True
-                    self.winner = "Black" if self.cur_player() == Color.BLACK else "White"
+                    self.winner = self.get_winner()
                 self.round += 1
             else:
                 logger.warning("Invalid move.")
+
+    def get_winner(self):
+        black_score = 0
+        white_score = 0
+        for x in range(self.size):
+            for y in range(self.size):
+                if self.board[x][y] == Color.BLACK:
+                    black_score += 1
+                elif self.board[x][y] == Color.WHITE:
+                    white_score += 1
+        if black_score > white_score:
+            return "Black"
+        elif black_score < white_score:
+            return "White"
 
     def check_game_over(self) -> bool:
         # Implement the logic to check if the game is over
@@ -425,11 +446,15 @@ class OthelloGame(BaseBoardGame):
                     available_moves.append((x, y))
         return available_moves
 
-    def clamp(self, coord: tuple[int, int], clear: bool = False) -> bool:
+    def clamp(self, coord: tuple[int, int], clear: bool = False, return_count: bool = False) -> bool | tuple[bool, int]:
         directions = [(1, 0), (0, 1), (1, 1), (1, -1), (-1, 0), (0, -1), (-1, -1), (-1, 1)]
+        if return_count:
+            return any([self.clamp_direction(coord, d[0], d[1], clear=clear, return_count=return_count)[0] for d in directions]), sum(
+                [self.clamp_direction(coord, d[0], d[1], clear=clear, return_count=return_count)[1] for d in directions]
+            )
         return any([self.clamp_direction(coord, d[0], d[1], clear=clear) for d in directions])
 
-    def clamp_direction(self, coord: tuple[int, int], dx: int, dy: int, clear: bool = False) -> bool:
+    def clamp_direction(self, coord: tuple[int, int], dx: int, dy: int, clear: bool = False, return_count: bool = False) -> bool | tuple[bool, int]:
         x, y = coord
         x += dx
         y += dy
@@ -442,7 +467,11 @@ class OthelloGame(BaseBoardGame):
             if clear:
                 for opposite in opposite_list:
                     self.board[opposite[0]][opposite[1]] = self.cur_player()
+            if return_count:
+                return len(opposite_list) > 0, len(opposite_list)
             return len(opposite_list) > 0
+        if return_count:
+            return False, 0
         return False
 
     def create_memento(self) -> Memento:
@@ -482,6 +511,10 @@ class OthelloGame(BaseBoardGame):
 
 class PlayerStrategy(ABC):
     role = None
+    color = Color.BLACK
+
+    def __init__(self, color):
+        self.color = color
 
     @abstractmethod
     def make_move(self, game: BaseBoardGame) -> tuple[int, int] | None:
@@ -517,12 +550,61 @@ class Level2AIPlayerStrategy(PlayerStrategy):
 
     # Simple Rules
     def make_move(self, game: BaseBoardGame) -> tuple[int, int] | None:
-        available_moves = game.check_available_moves()
-        if game.allow_none_move:
-            available_moves.append(None)
-        if len(available_moves) == 0:
-            return None
-        return random.choice(available_moves)
+        if game.name == "Gomoku Game":
+            available_moves = game.check_available_moves()
+            best_move = random.choice(available_moves)
+            best_score = -1
+            for x, y in available_moves:
+                game.board[x][y] = self.color
+                _, score = game.is_five((x, y), return_max_count=True)
+                if score > best_score:
+                    best_move = (x, y)
+                    best_score = score
+                game.board[x][y] = Color.EMPTY
+            return best_move
+        elif game.name == "Othello Game":
+            available_moves = game.check_available_moves()
+            if len(available_moves) == 0:
+                return None
+            corner_points = [(0, 0), (0, game.size - 1), (game.size - 1, 0), (game.size - 1, game.size - 1)]
+            edge_points = (
+                [(0, y) for y in range(game.size)]
+                + [(game.size - 1, y) for y in range(game.size)]
+                + [(x, 0) for x in range(game.size)]
+                + [(x, game.size - 1) for x in range(game.size)]
+            )
+            for x, y in available_moves:
+                if (x, y) in corner_points:
+                    return x, y
+            best_move = random.choice(available_moves)
+            best_score = -99999999
+            for x, y in available_moves:
+                board_back = copy.deepcopy(game.board)
+                game.board[x][y] = self.color
+                game.round += 1
+                _, score = game.clamp((x, y), clear=True, return_count=True)
+
+                opposite_available_moves = game.check_available_moves()
+                best_opposite_score = -99999999
+                for i, j in opposite_available_moves:
+                    game.board[i][j] = Color.WHITE if self.color == Color.BLACK else Color.BLACK
+                    game.round += 1
+                    _, opposite_score = game.clamp((i, j), clear=False, return_count=True)
+                    if opposite_score > best_opposite_score:
+                        best_opposite_score = opposite_score
+                    game.board[i][j] = Color.EMPTY
+                    game.round -= 1
+
+                if (x, y) in edge_points:
+                    score += 0.5
+                score -= best_opposite_score
+                if score > best_score:
+                    best_move = (x, y)
+                    best_score = score
+                game.round -= 1
+                game.board = board_back
+            logger.info(f"Best score: {best_score}, best move: {best_move}")
+            return best_move
 
 
 class Level3AIPlayerStrategy(PlayerStrategy):
