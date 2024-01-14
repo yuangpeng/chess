@@ -805,3 +805,8 @@ if __name__ == "__main__":
                 logger.info("Game loaded from file.")
 ```
 
+#### UML 图
+
+所有代码的 uml 图太大了，这里在第一阶段的基础上绘制了增量 uml 图，主要是 PlayerStrategy 这一部分。
+
+![stage2](README.assets/stage2.png)
