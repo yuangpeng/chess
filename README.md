@@ -445,3 +445,363 @@ if __name__ == "__main__":
 
 #### Othello Game
 
+黑白棋的规则是，在垂直、水平或者斜线的方向夹住对方的棋即可以翻转对方的棋子为自己的颜色，实现核心如下，即只需要在垂直水平和斜线 8 个方向判断是否有自己的棋子。若有，则把中间的棋子翻转，若所有方向都没有，则不是一个可下的位置。
+
+```python
+    def move(self, coord: tuple[int, int] | None):
+        if self.game_over:
+            return
+        # if coord is None:
+        #     logger.warning("You cannot pass proactively.")
+        #     return
+        available_moves = self.check_available_moves()
+        if len(available_moves) == 0:
+            self.history.append(self.create_memento())
+            self.replay.append(None)
+            self.round += 1
+        else:
+            if coord in available_moves:
+                self.history.append(self.create_memento())
+                self.replay.append(coord)
+                self.board[coord[0]][coord[1]] = self.cur_player()
+                self.clamp(coord, clear=True)
+                if self.check_game_over():
+                    self.game_over = True
+                    self.winner = self.get_winner()
+                self.round += 1
+            else:
+                logger.warning("Invalid move.")
+
+    def clamp(self, coord: tuple[int, int], clear: bool = False, return_count: bool = False) -> bool | tuple[bool, int]:
+        directions = [(1, 0), (0, 1), (1, 1), (1, -1), (-1, 0), (0, -1), (-1, -1), (-1, 1)]
+        if return_count:
+            return any([self.clamp_direction(coord, d[0], d[1], clear=clear, return_count=return_count)[0] for d in directions]), sum(
+                [self.clamp_direction(coord, d[0], d[1], clear=clear, return_count=return_count)[1] for d in directions]
+            )
+        return any([self.clamp_direction(coord, d[0], d[1], clear=clear) for d in directions])
+
+    def clamp_direction(self, coord: tuple[int, int], dx: int, dy: int, clear: bool = False, return_count: bool = False) -> bool | tuple[bool, int]:
+        x, y = coord
+        x += dx
+        y += dy
+        opposite_list = []
+        while 0 <= x < self.size and 0 <= y < self.size and self.board[x][y] == self.opposite_player():
+            opposite_list.append((x, y))
+            x += dx
+            y += dy
+        if 0 <= x < self.size and 0 <= y < self.size and self.board[x][y] == self.cur_player():
+            if clear:
+                for opposite in opposite_list:
+                    self.board[opposite[0]][opposite[1]] = self.cur_player()
+            if return_count:
+                return len(opposite_list) > 0, len(opposite_list)
+            return len(opposite_list) > 0
+        if return_count:
+            return False, 0
+        return False
+```
+
+判断为终局的条件是，黑子和白子都没地方可下，或者是棋盘已被填满，获胜条件是谁剩余的子多：
+
+```python
+    def check_game_over(self) -> bool:
+        # Implement the logic to check if the game is over
+        cur_available_moves = self.check_available_moves()
+        self.round += 1
+        next_available_moves = self.check_available_moves()
+        self.round -= 1
+        return len(cur_available_moves) == 0 and len(next_available_moves) == 0
+
+    def check_available_moves(self) -> list[tuple[int, int]]:
+        available_moves = []
+        for x in range(self.size):
+            for y in range(self.size):
+                if self.board[x][y] == Color.EMPTY and self.clamp((x, y), clear=False):
+                    available_moves.append((x, y))
+        return available_moves
+```
+
+#### 录像与回放
+
+录像和回放功能只需要在 BaseBoardGame 基类添加一个 replay 列表，这个列表保存着游戏每一步的落子位置。回放功能只需要重置棋盘后用 replay 重新下一遍。
+
+```python
+class BaseBoardGame(ABC):
+    def __init__(self, size: int, player1_strategy: PlayerStrategy, player2_strategy: PlayerStrategy):
+        # ...
+        self.replay: list[tuple[int, int] | None] = []
+        # ...
+
+class BoardGameGUI:
+    def playback(self):
+        replay_back = copy.deepcopy(self.game.replay)
+        self.game.__init__(self.size, self.game.player1_strategy, self.game.player2_strategy)
+        for move in replay_back:
+            sleep(0.5)
+            self.update_gui()
+            self.game.move(move)
+```
+
+#### AI 功能
+
+AI 功能通过策略模式加入 BaseBoardGame 基类，PlayerStrategy 定义一个基类，HumanPlayerStrategy 和 Level1AIPlayerStrategy 等继承该基类。HumanPlayerStrategy 通过 get_move 获得落子位置，get_move 在 GUI 类给出。Level1AIPlayerStrategy 实现从可落子位置随机取一个位置落子。Level2AIPlayerStrategy 使用简单的人工规则。对于五子棋来说比较简单能战胜 random AI，即每次落子位置在垂直、水平或者斜线方向有子即可。对于黑白棋来说，比较简单的落子的分数 = 能翻转对方子的数量 - 落完该子后对方能够翻转我们的最大数量。但这种方式并不能稳定战胜 random AI，因此加入一些经验下法：1）如果有四个角落能下，则必下这四个位置，这是因为这四个角落无法被翻转，能够掌握主动权；2）边缘位置的分数 +1，这是对边缘位置的奖励，因为边缘位置也不容易被翻转。加入这两条规则后可以稳定战胜 random AI。
+
+```python
+
+
+class PlayerStrategy(ABC):
+    role = None
+    color = Color.BLACK
+
+    def __init__(self, color):
+        self.color = color
+
+    @abstractmethod
+    def make_move(self, game: BaseBoardGame) -> tuple[int, int] | None:
+        pass
+
+
+class HumanPlayerStrategy(PlayerStrategy):
+    role = "Human"
+    move = None
+
+    def get_move(self, move: tuple[int, int] | None):
+        self.move = move
+
+    def make_move(self, game: BaseBoardGame) -> tuple[int, int] | None:
+        return self.move
+
+
+class Level1AIPlayerStrategy(PlayerStrategy):
+    role = "Level1 AI"
+
+    # Random Move
+    def make_move(self, game: BaseBoardGame) -> tuple[int, int] | None:
+        available_moves = game.check_available_moves()
+        if game.allow_none_move:
+            available_moves.append(None)
+        if len(available_moves) == 0:
+            return None
+        return random.choice(available_moves)
+
+
+class Level2AIPlayerStrategy(PlayerStrategy):
+    role = "Level2 AI"
+
+    # Simple Rules
+    def make_move(self, game: BaseBoardGame) -> tuple[int, int] | None:
+        if game.name == "Gomoku Game":
+            available_moves = game.check_available_moves()
+            best_move = random.choice(available_moves)
+            best_score = -1
+            for x, y in available_moves:
+                game.board[x][y] = self.color
+                _, score = game.is_five((x, y), return_max_count=True)
+                if score > best_score:
+                    best_move = (x, y)
+                    best_score = score
+                game.board[x][y] = Color.EMPTY
+            return best_move
+        elif game.name == "Othello Game":
+            available_moves = game.check_available_moves()
+            if len(available_moves) == 0:
+                return None
+            corner_points = [(0, 0), (0, game.size - 1), (game.size - 1, 0), (game.size - 1, game.size - 1)]
+            edge_points = (
+                [(0, y) for y in range(game.size)]
+                + [(game.size - 1, y) for y in range(game.size)]
+                + [(x, 0) for x in range(game.size)]
+                + [(x, game.size - 1) for x in range(game.size)]
+            )
+            for x, y in available_moves:
+                if (x, y) in corner_points:
+                    return x, y
+            best_move = random.choice(available_moves)
+            best_score = -99999999
+            for x, y in available_moves:
+                board_back = copy.deepcopy(game.board)
+                game.board[x][y] = self.color
+                game.round += 1
+                _, score = game.clamp((x, y), clear=True, return_count=True)
+
+                opposite_available_moves = game.check_available_moves()
+                best_opposite_score = -99999999
+                for i, j in opposite_available_moves:
+                    game.board[i][j] = Color.WHITE if self.color == Color.BLACK else Color.BLACK
+                    game.round += 1
+                    _, opposite_score = game.clamp((i, j), clear=False, return_count=True)
+                    if opposite_score > best_opposite_score:
+                        best_opposite_score = opposite_score
+                    game.board[i][j] = Color.EMPTY
+                    game.round -= 1
+
+                if (x, y) in edge_points:
+                    score += 0.5
+                score -= best_opposite_score
+                if score > best_score:
+                    best_move = (x, y)
+                    best_score = score
+                game.round -= 1
+                game.board = board_back
+            logger.info(f"Best score: {best_score}, best move: {best_move}")
+            return best_move
+```
+
+加入玩家策略后，BaseBoardGame 的落子位置需要由 cur_player_strategy 的 make_move 给出。
+
+```python
+class BaseBoardGame(ABC):
+    def __init__(self, size: int, player1_strategy: PlayerStrategy, player2_strategy: PlayerStrategy):
+        self.name = ""
+        self.size = size
+        self.board = [[Color.EMPTY for _ in range(size)] for _ in range(size)]
+        self.player1_strategy = player1_strategy
+        self.player2_strategy = player2_strategy
+        self.round = 0
+        self.game_over = False
+        self.winner = ""
+        self.history: list[Memento] = []  # Use a list of Mementos for the history
+        self.replay: list[tuple[int, int] | None] = []
+        self.allow_none_move = False
+  
+    def cur_player_strategy(self) -> PlayerStrategy:
+        return self.player1_strategy if self.cur_player() == Color.BLACK else self.player2_strategy
+
+    def play_round(self):
+        move = self.cur_player_strategy().make_move(self)
+        self.move(move)
+```
+
+#### 用户账户管理
+
+一条帐号记录包括密码，围棋、五子棋和黑白棋游戏获胜次数和总次数的信息，这里用 AccountInfo 字典保存一条记录。帐号信息管理在 accounts.json 文件中，AccountManager 实现了加载帐号信息、保存帐号信息、注册、登陆以及游戏后更新获胜或者失败记录。密码使用哈希加密保存。
+
+```python
+from __future__ import annotations
+
+import copy
+import hashlib
+import json
+import os
+from typing import TypedDict
+
+from loguru import logger
+
+
+class AccountInfo(TypedDict):
+    password: str
+    go_games_played: int
+    go_wins: int
+    gomoku_games_played: int
+    gomoku_wins: int
+    othello_games_played: int
+    othello_wins: int
+
+
+class AccountManager:
+    def __init__(self, filename="accounts.json"):
+        self.filename = filename
+        self.accounts = self.load_accounts()
+        self.login_state = {key: False for key, _ in self.accounts.items()}
+
+    def load_accounts(self):
+        if not os.path.exists(self.filename):
+            return {}
+        with open(self.filename, "r") as file:
+            return json.load(file)
+
+    def save_accounts(self):
+        with open(self.filename, "w") as file:
+            json.dump(self.accounts, file, indent=4)
+
+    def _hash_password(self, password: str) -> str:
+        # Use a secure hashing algorithm with a salt
+        salt = os.urandom(32)  # A new salt for this user
+        hashed_password = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100000)
+        return (salt + hashed_password).hex()
+
+    def verify_password(self, username, password: str):
+        salt_from_storage = bytes.fromhex(self.accounts[username]["password"])[:32]  # The salt from the stored password
+        stored_password = bytes.fromhex(self.accounts[username]["password"])[32:]
+        hashed_password = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt_from_storage, 100000)
+        return hashed_password == stored_password
+
+    def register(self, username: str, password: str):
+        if username in self.accounts:
+            logger.warning("Username already exists")
+            return False  # Username already exists
+        self.accounts[username] = AccountInfo(
+            password=self._hash_password(password),
+            go_games_played=0,
+            go_wins=0,
+            gomoku_games_played=0,
+            gomoku_wins=0,
+            othello_games_played=0,
+            othello_wins=0,
+        )
+        self.save_accounts()
+        return True
+
+    def login(self, username: str, password: str) -> bool:
+        if username not in self.accounts:
+            logger.warning("Username does not exist, please register")
+            return False  # Username does not exist
+        if not self.verify_password(username, password):
+            logger.warning("Incorrect password")
+            return False
+        self.login_state[username] = True
+        logger.info("Login successful")
+        return True
+
+    def update_record(self, username: str, game: str, win: bool):
+        if username not in self.login_state:
+            return False
+        else:
+            if not self.login_state[username]:
+                return False
+        game_list = ["go", "gomoku", "othello"]
+        if game not in game_list:
+            return False
+        self.accounts[username][f"{game}_games_played"] += 1
+        if win:
+            self.accounts[username][f"{game}_wins"] += 1
+        self.save_accounts()
+        return True
+
+    def get_record(self, username: str) -> dict:
+        if username not in self.login_state:
+            return {}
+        else:
+            if not self.login_state[username]:
+                return {}
+        record = copy.deepcopy(self.accounts[username])
+        del record["password"]
+        return record
+
+
+if __name__ == "__main__":
+    account_manager = AccountManager()
+    account_manager.register("test", "test")
+    account_manager.login("test", "test1")
+    account_manager.update_record("test", "go", True)
+    print(account_manager.get_record("test"))
+```
+
+为了使得对局保存和帐号关联，拓展 BaseBoardGame 的 save_to_file 和 load_from_file 的函数，传入游戏当局用户1和2的信息。在加载的时候也做一次验证，验证未通过则不能加载对局记录。
+
+```python
+    def save_to_file(self, file_path: str, user1: str, user2: str):
+        with open(file_path, "wb") as file:
+            pickle.dump((self.create_memento(), {"user1": user1, "user2": user2}), file)
+            logger.info("Game saved to file.")
+
+    def load_from_file(self, file_path: str, user1: str, user2: str):
+        with open(file_path, "rb") as file:
+            memento, account_info = pickle.load(file)
+            if account_info["user1"] != user1 or account_info["user2"] != user2:
+                logger.warning("The game file does not match the current user.")
+            else:
+                self.restore_from_memento(memento)
+                logger.info("Game loaded from file.")
+```
+

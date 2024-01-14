@@ -1,0 +1,71 @@
+@startuml stage2
+
+class BaseBoardGame {
+    - name: str
+    - size: int
+    - board: list[list[Color]]
+    - player1_strategy: PlayerStrategy
+    - player2_strategy: PlayerStrategy
+    - round: int
+    - game_over: bool
+    - winner: str
+    - history: list[Memento]
+    - replay: list[tuple[int, int] | None]
+    - allow_none_move: bool
+    + cur_player(): Color
+    + opposite_player(): Color
+    + cur_player_strategy(): PlayerStrategy
+    + play_round()
+    + surrender()
+    + regret()
+    + restart()
+    + create_memento(): Memento
+    + restore_from_memento(memento: Memento)
+    + save_to_file(file_path: str, user1: str, user2: str)
+    + load_from_file(file_path: str, user1: str, user2: str)
+    + check_available_moves(): list[tuple[int, int]]
+    + move(coord: tuple[int, int] | None)
+}
+
+class GoGame {
+    - komi: float
+    - ko_point: tuple[int, int] | None
+    - last_move_captured: NoneType
+    - abstention: int
+    - final_score: str
+}
+
+class GomokuGame {
+}
+
+class OthelloGame {
+}
+
+class PlayerStrategy {
+    - color: Color
+    + make_move(game: BaseBoardGame): tuple[int, int] | None
+}
+
+class HumanPlayerStrategy {
+    - move: tuple[int, int] | None
+    + get_move(move: tuple[int, int] | None)
+}
+
+class Level1AIPlayerStrategy {
+}
+
+class Level2AIPlayerStrategy {
+}
+
+class Level3AIPlayerStrategy {
+}
+
+BaseBoardGame <|-- GoGame
+BaseBoardGame <|-- GomokuGame
+BaseBoardGame <|-- OthelloGame
+PlayerStrategy <|-- HumanPlayerStrategy
+PlayerStrategy <|-- Level1AIPlayerStrategy
+PlayerStrategy <|-- Level2AIPlayerStrategy
+PlayerStrategy <|-- Level3AIPlayerStrategy
+
+@enduml
