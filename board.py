@@ -30,6 +30,7 @@ class BaseBoardGame(ABC):
         self.game_over = False
         self.winner = ""
         self.history: list[Memento] = []  # Use a list of Mementos for the history
+        self.replay: list[tuple[int, int] | None] = []
         self.allow_none_move = False
 
     def cur_player(self) -> Color:
@@ -119,6 +120,7 @@ class GoGame(BaseBoardGame):
                 return
 
             self.history.append(self.create_memento())
+            self.replay.append(coord)
 
             # Rule 5: Starting with an empty grid, the players alternate turns, starting with Black.
             current_color = self.cur_player()
@@ -138,6 +140,7 @@ class GoGame(BaseBoardGame):
             self.clear(coord)
         else:  # pass
             self.history.append(self.create_memento())
+            self.replay.append(None)
             self.abstention += 1
             # Rule 8: The game ends after two consecutive passes.
             if self.abstention == 2:
@@ -169,6 +172,7 @@ class GoGame(BaseBoardGame):
             "winner": self.winner,
             "final_score": self.final_score,
             # "history": copy.deepcopy(self.history),
+            "replay": copy.deepcopy(self.replay),
             "komi": self.komi,
             "ko_point": self.ko_point,
             "last_move_captured": self.last_move_captured,
@@ -187,6 +191,7 @@ class GoGame(BaseBoardGame):
         self.winner = state["winner"]
         self.final_score = state["final_score"]
         # self.history = state["history"]
+        self.replay = state["replay"]
         self.komi = state["komi"]
         self.ko_point = state["ko_point"]
         self.last_move_captured = state["last_move_captured"]
@@ -311,6 +316,7 @@ class GomokuGame(BaseBoardGame):
             logger.warning("Coord cannot be None.")
             return
         self.history.append(self.create_memento())
+        self.replay.append(coord)
         x, y = coord
         self.board[x][y] = self.cur_player()
         if self.is_five(coord):
@@ -359,6 +365,7 @@ class GomokuGame(BaseBoardGame):
             "game_over": self.game_over,
             "winner": self.winner,
             # "history": copy.deepcopy(self.history),
+            "replay": copy.deepcopy(self.replay),
         }
         return Memento(state)
 
@@ -372,6 +379,7 @@ class GomokuGame(BaseBoardGame):
         self.game_over = state["game_over"]
         self.winner = state["winner"]
         # self.history = state["history"]
+        self.replay = state["replay"]
 
     def save_to_file(self, file_path: str):
         with open(file_path, "wb") as file:
@@ -403,10 +411,12 @@ class OthelloGame(BaseBoardGame):
         available_moves = self.check_available_moves()
         if len(available_moves) == 0:
             self.history.append(self.create_memento())
+            self.replay.append(None)
             self.round += 1
         else:
             if coord in available_moves:
                 self.history.append(self.create_memento())
+                self.replay.append(coord)
                 self.board[coord[0]][coord[1]] = self.cur_player()
                 self.clamp(coord, clear=True)
                 if self.check_game_over():
@@ -484,6 +494,7 @@ class OthelloGame(BaseBoardGame):
             "game_over": self.game_over,
             "winner": self.winner,
             # "history": copy.deepcopy(self.history),
+            "replay": copy.deepcopy(self.replay),
         }
         return Memento(state)
 
@@ -497,6 +508,7 @@ class OthelloGame(BaseBoardGame):
         self.game_over = state["game_over"]
         self.winner = state["winner"]
         # self.history = state["history"]
+        self.replay = state["replay"]
 
     def save_to_file(self, file_path: str):
         with open(file_path, "wb") as file:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import sys
 from time import sleep
 
@@ -276,12 +277,21 @@ class BoardGameGUI:
         self.buttons = [
             Button(
                 sidebar_x - int(30 * self.ratio),
-                self.window_height - int(520 * self.ratio),
+                self.window_height - int(560 * self.ratio),
                 int(252 * self.ratio),
                 int(30 * self.ratio),
                 self.ratio,
                 "Re-login",
                 self.__init__,
+            ),
+            Button(
+                sidebar_x - int(30 * self.ratio),
+                self.window_height - int(520 * self.ratio),
+                int(252 * self.ratio),
+                int(30 * self.ratio),
+                self.ratio,
+                "Playback",
+                self.playback,
             ),
             Button(
                 sidebar_x - int(30 * self.ratio),
@@ -474,6 +484,14 @@ class BoardGameGUI:
             ),
         ]
 
+    def playback(self):
+        replay_back = copy.deepcopy(self.game.replay)
+        self.game.__init__(self.size, self.game.player1_strategy, self.game.player2_strategy)
+        for move in replay_back:
+            sleep(0.5)
+            self.update_gui()
+            self.game.move(move)
+
     def open_save_dialog(self):
         # Create a file dialog to save the file
         self.save_dialog = pygame_gui.windows.UIFileDialog(
@@ -627,19 +645,19 @@ class BoardGameGUI:
             for event in pygame.event.get():
                 if getattr(self, "save_dialog", None):
                     if len(self.save_dialog.groups()) == 0:
-                        del self.save_dialog
+                        # del self.save_dialog
                         self.activate_dialog = False
                 if getattr(self, "load_dialog", None):
                     if len(self.load_dialog.groups()) == 0:
-                        del self.load_dialog
+                        # del self.load_dialog
                         self.activate_dialog = False
                 self.manager.process_events(event)
                 # Handle the save and load dialog events
                 if event.type == pygame_gui.UI_FILE_DIALOG_PATH_PICKED:
-                    if event.ui_element == self.save_dialog:
+                    if event.ui_element == getattr(self, "save_dialog", None):
                         self.save_game_state(event.text)
                         del self.save_dialog
-                    elif event.ui_element == self.load_dialog:
+                    elif event.ui_element == getattr(self, "load_dialog", None):
                         self.load_game_state(event.text)
                         del self.load_dialog
                     self.activate_dialog = False
