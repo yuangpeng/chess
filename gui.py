@@ -609,10 +609,10 @@ class BoardGameGUI:
         self.game.move(None)
 
     def save_game_state(self, filename):
-        self.game.save_to_file(filename)
+        self.game.save_to_file(filename, self.user1, self.user2)
 
     def load_game_state(self, filename):
-        self.game.load_from_file(filename)
+        self.game.load_from_file(filename, self.user1, self.user2)
 
     def handle_mouse_click(self, pos: tuple(float, float)):
         x, y = pos

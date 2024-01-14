@@ -78,11 +78,11 @@ class BaseBoardGame(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def save_to_file(self, file_path: str):
+    def save_to_file(self, file_path: str, user1: str, user2: str):
         raise NotImplementedError
 
     @abstractmethod
-    def load_from_file(self, file_path: str):
+    def load_from_file(self, file_path: str, user1: str, user2: str):
         raise NotImplementedError
 
 
@@ -197,15 +197,19 @@ class GoGame(BaseBoardGame):
         self.last_move_captured = state["last_move_captured"]
         self.abstention = state["abstention"]
 
-    def save_to_file(self, file_path: str):
+    def save_to_file(self, file_path: str, user1: str, user2: str):
         with open(file_path, "wb") as file:
-            pickle.dump(self.create_memento(), file)
+            pickle.dump((self.create_memento(), {"user1": user1, "user2": user2}), file)
             logger.info("Game saved to file.")
 
-    def load_from_file(self, file_path: str):
+    def load_from_file(self, file_path: str, user1: str, user2: str):
         with open(file_path, "rb") as file:
-            self.restore_from_memento(pickle.load(file))
-            logger.info("Game loaded from file.")
+            memento, account_info = pickle.load(file)
+            if account_info["user1"] != user1 or account_info["user2"] != user2:
+                logger.warning("The game file does not match the current user.")
+            else:
+                self.restore_from_memento(memento)
+                logger.info("Game loaded from file.")
 
     def neighbors(self, coord: tuple[int, int]) -> list[tuple[int, int]]:
         x, y = coord
@@ -381,15 +385,19 @@ class GomokuGame(BaseBoardGame):
         # self.history = state["history"]
         self.replay = state["replay"]
 
-    def save_to_file(self, file_path: str):
+    def save_to_file(self, file_path: str, user1: str, user2: str):
         with open(file_path, "wb") as file:
-            pickle.dump(self.create_memento(), file)
+            pickle.dump((self.create_memento(), {"user1": user1, "user2": user2}), file)
             logger.info("Game saved to file.")
 
-    def load_from_file(self, file_path: str):
+    def load_from_file(self, file_path: str, user1: str, user2: str):
         with open(file_path, "rb") as file:
-            self.restore_from_memento(pickle.load(file))
-            logger.info("Game loaded from file.")
+            memento, account_info = pickle.load(file)
+            if account_info["user1"] != user1 or account_info["user2"] != user2:
+                logger.warning("The game file does not match the current user.")
+            else:
+                self.restore_from_memento(memento)
+                logger.info("Game loaded from file.")
 
 
 class OthelloGame(BaseBoardGame):
@@ -510,15 +518,19 @@ class OthelloGame(BaseBoardGame):
         # self.history = state["history"]
         self.replay = state["replay"]
 
-    def save_to_file(self, file_path: str):
+    def save_to_file(self, file_path: str, user1: str, user2: str):
         with open(file_path, "wb") as file:
-            pickle.dump(self.create_memento(), file)
+            pickle.dump((self.create_memento(), {"user1": user1, "user2": user2}), file)
             logger.info("Game saved to file.")
 
-    def load_from_file(self, file_path: str):
+    def load_from_file(self, file_path: str, user1: str, user2: str):
         with open(file_path, "rb") as file:
-            self.restore_from_memento(pickle.load(file))
-            logger.info("Game loaded from file.")
+            memento, account_info = pickle.load(file)
+            if account_info["user1"] != user1 or account_info["user2"] != user2:
+                logger.warning("The game file does not match the current user.")
+            else:
+                self.restore_from_memento(memento)
+                logger.info("Game loaded from file.")
 
 
 class PlayerStrategy(ABC):
