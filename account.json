@@ -30,8 +30,8 @@
         "password": "68cd6fe8f5a7b2057c58bb640b41ed4dbe715bbc13b0ddd0d5da9e16a8a1f653d90bdf00eeeba3b45aaf68b8e46b39e750d7df29945ca8e809a7b16feaea004c",
         "go_games_played": 0,
         "go_wins": 0,
-        "gomoku_games_played": 2,
-        "gomoku_wins": 0,
+        "gomoku_games_played": 6,
+        "gomoku_wins": 3,
         "othello_games_played": 2,
         "othello_wins": 1
     },
@@ -39,8 +39,17 @@
         "password": "e4f2c8b654ea5cabf8efbfb2c95077bbc2a6082849865e41287d55296fe77d6abe851afce301a95bcf191507154c9beb91da2fdd4be6e1373db0dd5369f0078c",
         "go_games_played": 0,
         "go_wins": 0,
-        "gomoku_games_played": 2,
-        "gomoku_wins": 2,
+        "gomoku_games_played": 6,
+        "gomoku_wins": 3,
+        "othello_games_played": 0,
+        "othello_wins": 0
+    },
+    "user3": {
+        "password": "987a6aa2e7b02a0301b96b7ea8222ff5c4ec60ff15fb9ba2b83caadbfd60a6c2bdd2c6b8cded1324a7a05e94d4bd22b76a990d85deca3011490d5122db4ca805",
+        "go_games_played": 0,
+        "go_wins": 0,
+        "gomoku_games_played": 0,
+        "gomoku_wins": 0,
         "othello_games_played": 0,
         "othello_wins": 0
     }
